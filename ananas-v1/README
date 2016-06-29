@@ -1,0 +1,14 @@
+This is Ondřej Žára's example game "Ananas aus Caracas" as described in
+
+http://www.roguebasin.com/index.php?title=Rot.js_tutorial
+
+except that I've completely reworked the game engine to use
+Bob Nystrom's approach to game loops as described in
+
+http://journal.stuffwithstuff.com/2014/07/15/a-turn-based-game-loop/
+
+The CSS styles are shamelessly copied from one of Ondřej's
+actually polished games, "The Royal Wedding".
+
+To demonstrate some of the new features, I've replaced the
+antagonist Pedro with a family of three grid bugs.

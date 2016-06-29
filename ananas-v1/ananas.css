@@ -1,0 +1,38 @@
+html, body {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	background-color: #000;
+	font-family: droid sans mono, monospace;
+	color: #b82;
+	overflow: hidden;
+}
+
+#level {
+	position: absolute;
+	overflow: hidden;
+	width: 80%;
+	height: 70%;
+	right: 0;
+	top: 0;
+}
+
+#legend {
+	position: absolute;
+	overflow-y: auto;
+	width: 80%;
+	height: 30%;
+	right: 0;
+	bottom: 0;
+	color: #777;
+}
+
+#legend p {
+	margin: 0 0 0 1em;
+}
+
+#legend span {
+	vertical-align: middle;
+}
