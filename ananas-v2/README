@@ -1,0 +1,8 @@
+This is ananas-v1 (see that README), plus an interactive command line.
+
+Entering commands such as NORTHWEST or OPEN BOX on the command line
+in the lower pane causes the player-character to execute those actions
+in the upper pane.
+
+At any point, you can QUIT or RESTART a game by typing those commands
+into the lower pane.
