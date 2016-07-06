@@ -16,7 +16,7 @@ function verbs(subject, verb) {
 var Game = {
     init: function() {
         this.display = new ROT.Display({
-            width: 80,
+            width: 79,
             height: 25,
             spacing: 1.1,
         });
@@ -54,6 +54,7 @@ var Game = {
         this.legend.scrollTop = this.legend.scrollHeight;
         this.is_over = false;
         this._hasEverBeenVisible = {};
+        this._oldroom = null;
         this._generateMap();
         this._populateMap();
         this.currentActor = 0;
@@ -77,6 +78,15 @@ var Game = {
             this.currentActor = (this.currentActor + 1) % this.actors.length;
         }
         this.redrawDisplay();
+        this.reportSurroundings();
+    },
+
+    reportSurroundings: function() {
+        var newroom = this.map.room(this.player.x, this.player.y);
+        if (newroom != this._oldroom) {
+            this.alert("You enter %s.".format(newroom.description()));
+            this._oldroom = newroom;
+        }
     },
 
     win: function() {
@@ -186,7 +196,7 @@ var Game = {
     _generateMap: function() {
         this.ananas = null;
         this.actors = [];
-        this.map = new Map(80, 25);
+        this.map = new Map(79, 25);
         this.map.generateDungeon();
     },
 
@@ -227,8 +237,8 @@ var Game = {
         });
         function isVisible(x, y) { return (x+','+y) in visibleSquares; }
 
-        for (var x = 0; x < 80; ++x) {
-            for (var y = 0; y < 25; ++y) {
+        for (var x = 0; x < this.map.width; ++x) {
+            for (var y = 0; y < this.map.height; ++y) {
                 if (isVisible(x, y)) {
                     var actors = this.actorsAt(x, y);
                     if (actors.length > 0) {
@@ -245,9 +255,11 @@ var Game = {
                         this.display.draw(x, y, g, fg, bg);
                     }
                     this._hasEverBeenVisible[x + ',' + y] = true;
-                } else if (this._hasEverBeenVisible[x + ',' + y] || true) {
+                } else if (this._hasEverBeenVisible[x + ',' + y]) {
+                    var multiplier = Math.hypot(Game.player.x - x, Game.player.y - y) / 16;
+                    multiplier = Math.min(Math.max(0.00, 1 - multiplier), 1.00);
                     var [g, fg, bg] = this.map.terrain(x, y).appearance;
-                    fg = ROT.Color.toHex(ROT.Color.interpolate([0,0,0], ROT.Color.fromString(fg || '#777'), 0.75));
+                    fg = ROT.Color.toHex(ROT.Color.interpolate([64,64,64], ROT.Color.fromString(fg || '#777'), multiplier));
                     this.display.draw(x, y, g, fg, bg);
                 } else {
                     this.display.draw(x, y, ' ');
@@ -266,6 +278,16 @@ var Actor = function(x, y) {
     this.y = y || 0;
     this.energy = 0;
     this.displayPriority = 0;
+};
+Actor.prototype.canSee = function(actor) {
+    var result = false;
+    var fov = new ROT.FOV.PreciseShadowcasting(Game.map.lightPassesCallback.bind(Game.map));
+    fov.compute(this.x, this.y, 100, function(x, y, r, visibility) {
+        if (x == actor.x && y == actor.y) {
+            result = true;
+        }
+    });
+    return result;
 };
 
 var Item = function(x, y) {
@@ -393,7 +415,9 @@ WalkAction.prototype.perform = function(actor) {
         var actors = Game.actorsAt(newX, newY);
         for (var i = 0; i < actors.length; ++i) {
             if (actors[i] instanceof Creature) {
-                Game.alert("%The %s into %the.".format(actor, verbs(actor, "bump"), actors[i]));
+                if (Game.player.canSee(actor) && Game.player.canSee(actors[i])) {
+                    Game.alert("%The %s into %the.".format(actor, verbs(actor, "bump"), actors[i]));
+                }
                 return null;
             }
         }
@@ -409,7 +433,9 @@ var FightAction = function(defender) {
     this.defender = defender;
 };
 FightAction.prototype.perform = function(actor) {
-    Game.alert("%The %s %the!".format(actor, verbs(actor, "hit"), this.defender));
+    if (Game.player.canSee(actor) && Game.player.canSee(this.defender)) {
+        Game.alert("%The %s %the!".format(actor, verbs(actor, "hit"), this.defender));
+    }
     actor.energy -= 100;
     this.defender.getHit(5);
     return null;
@@ -434,7 +460,9 @@ var ShockAction = function(defender) {
     this.defender = defender;
 };
 ShockAction.prototype.perform = function(actor) {
-    Game.alert("%The %s %the!".format(actor, verbs(actor, "shock"), this.defender));
+    if (Game.player.canSee(actor) && Game.player.canSee(this.defender)) {
+        Game.alert("%The %s %the!".format(actor, verbs(actor, "shock"), this.defender));
+    }
     actor.energy -= 100;
     this.defender.getHit(1);
     return null;
