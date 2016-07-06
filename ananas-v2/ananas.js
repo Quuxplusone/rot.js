@@ -1,5 +1,10 @@
 String.format.map.the = "the";
 
+ROT.RNG.getNormalInt = function(min, max) {
+    var x = this.getNormal((min + max + 1) / 2, (max - min + 1) / 4);
+    return Math.min(Math.max(min, Math.round(x)), max);
+};
+
 function verbs(subject, verb) {
     if (subject.the() == "you") {
         return verb;
@@ -240,7 +245,7 @@ var Game = {
                         this.display.draw(x, y, g, fg, bg);
                     }
                     this._hasEverBeenVisible[x + ',' + y] = true;
-                } else if (this._hasEverBeenVisible[x + ',' + y]) {
+                } else if (this._hasEverBeenVisible[x + ',' + y] || true) {
                     var [g, fg, bg] = this.map.terrain(x, y).appearance;
                     fg = ROT.Color.toHex(ROT.Color.interpolate([0,0,0], ROT.Color.fromString(fg || '#777'), 0.75));
                     this.display.draw(x, y, g, fg, bg);
@@ -334,6 +339,9 @@ GridBug.prototype.getNextAction = function() {
     }
     astar.compute(this.x, this.y, pathCallback);
 
+    if (path.length == 0) {
+        return new WaitAction();
+    }
     var newX = path[1][0];
     var newY = path[1][1];
     var targets = Game.actorsAt(newX, newY);
