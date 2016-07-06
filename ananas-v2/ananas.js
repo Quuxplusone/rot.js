@@ -1,5 +1,13 @@
 String.format.map.the = "the";
 
+function verbs(subject, verb) {
+    if (subject.the() == "you") {
+        return verb;
+    } else {
+        return verb + "s";
+    }
+}
+
 var Game = {
     init: function() {
         this.display = new ROT.Display({
@@ -40,7 +48,9 @@ var Game = {
         this.adventure_input.value = '';
         this.legend.scrollTop = this.legend.scrollHeight;
         this.is_over = false;
+        this._hasEverBeenVisible = {};
         this._generateMap();
+        this._populateMap();
         this.currentActor = 0;
         this.runGameLoopUntilBlocked();
     },
@@ -93,13 +103,13 @@ var Game = {
             case ROT.VK_RETURN:
                 Game.player.setNextAction(new BoxAction()); return;
             case ROT.VK_UP:
-                Game.player.setNextAction(new WalkAction(0, -1)); return;
+                Game.player.setNextAction(new WalkOrFightAction(0, -1)); return;
             case ROT.VK_DOWN:
-                Game.player.setNextAction(new WalkAction(0, 1)); return;
+                Game.player.setNextAction(new WalkOrFightAction(0, 1)); return;
             case ROT.VK_RIGHT:
-                Game.player.setNextAction(new WalkAction(1, 0)); return;
+                Game.player.setNextAction(new WalkOrFightAction(1, 0)); return;
             case ROT.VK_LEFT:
-                Game.player.setNextAction(new WalkAction(-1, 0)); return;
+                Game.player.setNextAction(new WalkOrFightAction(-1, 0)); return;
             default:
                 return;
         }
@@ -169,34 +179,28 @@ var Game = {
     },
 
     _generateMap: function() {
-        var digger = new ROT.Map.Digger(80,20);
-        var freeCells = [];
-
-        this.map = {};
         this.ananas = null;
         this.actors = [];
+        this.map = new Map(80, 25);
+        this.map.generateDungeon();
+    },
 
-        var digCallback = function(x, y, value) {
-            if (value) { return; }
-
-            var key = x+","+y;
-            this.map[key] = ".";
-            freeCells.push(key);
-        }
-        digger.create(digCallback.bind(this));
-
+    _populateMap: function() {
+        var freeCells = this.map.getAllPassableCoordinates();
         this.player = this._createBeing(Player, freeCells);
-        for (var i = 0; i < 10; i++) {
-            var box = this._createBeing(BananaBox, freeCells);
-            var key = box.x + ',' + box.y;
-            this.map[key] = '*';
-            if (i === 0) {
-                this.ananas = key;
-            }
-        }
         this._createBeing(GridBug, freeCells);
         this._createBeing(GridBug, freeCells);
         this._createBeing(GridBug, freeCells);
+        this._createBeing(BananaBox, freeCells);
+        this._createBeing(BananaBox, freeCells);
+        this._createBeing(BananaBox, freeCells);
+        this._createBeing(BananaBox, freeCells);
+        this._createBeing(BananaBox, freeCells);
+        this._createBeing(BananaBox, freeCells);
+        this._createBeing(BananaBox, freeCells);
+        this._createBeing(BananaBox, freeCells);
+        this._createBeing(BananaBox, freeCells);
+        this.ananas = this._createBeing(BananaBox, freeCells);
     },
 
     _createBeing: function(what, freeCells) {
@@ -211,26 +215,35 @@ var Game = {
     },
 
     redrawDisplay: function() {
-        var actormap = {};
-        for (var i = 0; i < this.actors.length; ++i) {
-            var a = this.actors[i];
-            actormap[a.x+','+a.y] = a;
-        }
+        var fov = new ROT.FOV.PreciseShadowcasting(Game.map.lightPassesCallback.bind(Game.map));
+        var visibleSquares = {};
+        fov.compute(this.player.x, this.player.y, 100, function(x, y, r, visibility) {
+            visibleSquares[x+','+y] = (visibility > 0.5);
+        });
+        function isVisible(x, y) { return (x+','+y) in visibleSquares; }
+
         for (var x = 0; x < 80; ++x) {
             for (var y = 0; y < 25; ++y) {
-                var key = x+','+y;
-                var actors = this.actorsAt(x, y);
-                if (actors.length > 0) {
-                    function keycmp(a, b) {
-                        if (a.displayPriority < b.displayPriority) return 1;
-                        if (a.displayPriority > b.displayPriority) return -1;
-                        return 0;
+                if (isVisible(x, y)) {
+                    var actors = this.actorsAt(x, y);
+                    if (actors.length > 0) {
+                        function keycmp(a, b) {
+                            if (a.displayPriority < b.displayPriority) return 1;
+                            if (a.displayPriority > b.displayPriority) return -1;
+                            return 0;
+                        }
+                        actors.sort(keycmp);
+                        var [g, fg, bg] = actors[0].getAppearance();
+                        this.display.draw(x, y, g, fg, bg);
+                    } else {
+                        var [g, fg, bg] = this.map.terrain(x, y).appearance;
+                        this.display.draw(x, y, g, fg, bg);
                     }
-                    actors.sort(keycmp);
-                    var [g, fg, bg] = actors[0].getAppearance();
+                    this._hasEverBeenVisible[x + ',' + y] = true;
+                } else if (this._hasEverBeenVisible[x + ',' + y]) {
+                    var [g, fg, bg] = this.map.terrain(x, y).appearance;
+                    fg = ROT.Color.toHex(ROT.Color.interpolate([0,0,0], ROT.Color.fromString(fg || '#777'), 0.75));
                     this.display.draw(x, y, g, fg, bg);
-                } else if (key in this.map) {
-                    this.display.draw(x, y, '.');
                 } else {
                     this.display.draw(x, y, ' ');
                 }
@@ -244,76 +257,91 @@ var Game = {
 //
 
 var Actor = function(x, y) {
-    this.x = x;
-    this.y = y;
+    this.x = x || 0;
+    this.y = y || 0;
     this.energy = 0;
-    this.displayPriority = 50;
+    this.displayPriority = 0;
 };
 
-var Player = function(x, y) {
-    Actor.call(this, x, y);
-    this.displayPriority = 99;
-    this._action = null;
-};
-Player.prototype = {
-    the: function() { return "you"; },
-    getAppearance: function() {
-        return ['@', '#ff0', '#000'];
-    },
-    getSpeed: function() {
-        return 10;
-    },
-    getNextAction: function() {
-        var action = this._action;
-        this._action = null;
-        return action;
-    },
-    setNextAction: function(action) {
-        this._action = action;
-    },
-};
-
-var BananaBox = function(x, y) {
+var Item = function(x, y) {
     Actor.call(this, x, y);
     this.displayPriority = 1;
 };
-BananaBox.prototype = {
-    the: function() { return "the banana box"; },
-    getAppearance: function() { return ['*']; },
-    getSpeed: function() { return 0; },
+Item.prototype = new Actor();
+Item.prototype.getSpeed = function() { return 0; };
+Item.prototype.getHit = function(dmg) {}
+
+var Creature = function(x, y) {
+    Actor.call(this, x, y);
+    this.displayPriority = 50;
+    this.hp = 100;
 };
+Creature.prototype = new Actor();
+Creature.prototype.getHit = function(dmg) {
+    // TODO: this isn't a very good division of labor here
+    this.hp = Math.max(0, this.hp - dmg);
+    if (this.hp == 0) {
+        var i = Game.actors.indexOf(this);
+        Game.actors.splice(i, 1);
+    }
+};
+
+var Player = function(x, y) {
+    Creature.call(this, x, y);
+    this.displayPriority = 99;
+    this.hp = 100;
+    this._action = null;
+};
+Player.prototype = new Creature();
+Player.prototype.the = function() { return "you"; };
+Player.prototype.getAppearance = function() { return ['@', '#ff0', '#000']; };
+Player.prototype.getSpeed = function() { return 10; };
+Player.prototype.setNextAction = function(action) { this._action = action; };
+Player.prototype.getNextAction = function() {
+    var action = this._action;
+    this._action = null;
+    return action;
+};
+
+var BananaBox = function(x, y) {
+    Item.call(this, x, y);
+    this.displayPriority = 1;
+};
+BananaBox.prototype = new Item();
+BananaBox.prototype.the = function() { return "the banana box"; };
+BananaBox.prototype.getAppearance = function() { return ['`']; };
 
 var GridBug = function(x, y) {
-    Actor.call(this, x, y);
+    Creature.call(this, x, y);
+    this.hp = 10;
 };
-GridBug.prototype = {
-    the: function() { return "the grid bug"; },
-    getAppearance: function() { return ['x', '#f0f']; },
-    getSpeed: function() { return 6; },
-    getNextAction: function() {
-        var x = Game.player.x;
-        var y = Game.player.y;
+GridBug.prototype = new Creature();
+GridBug.prototype.the = function() { return "the grid bug"; };
+GridBug.prototype.getAppearance = function() { return ['x', '#f0f']; };
+GridBug.prototype.getSpeed = function() { return 6; };
+GridBug.prototype.getNextAction = function() {
+    var x = Game.player.x;
+    var y = Game.player.y;
 
-        var passableCallback = function(x, y) {
-            return (x+","+y in Game.map);
-        }
-        var astar = new ROT.Path.AStar(x, y, passableCallback, {topology:4});
+    var isPassable = function(x, y) {
+        return !Game.map.terrain(x, y).blocksWalking;
+    }
+    var astar = new ROT.Path.AStar(x, y, isPassable, {topology:4});
 
-        var path = [];
-        var pathCallback = function(x, y) {
-            path.push([x, y]);
-        }
-        astar.compute(this.x, this.y, pathCallback);
+    var path = [];
+    var pathCallback = function(x, y) {
+        path.push([x, y]);
+    }
+    astar.compute(this.x, this.y, pathCallback);
 
-        var newX = path[1][0];
-        var newY = path[1][1];
-        var targets = Game.actorsAt(newX, newY);
-        if (targets.length > 0) {
-            return new ShockAction(targets[0]);
-        } else {
-            return new WalkAction(newX - this.x, newY - this.y);
-        }
-    },
+    var newX = path[1][0];
+    var newY = path[1][1];
+    var targets = Game.actorsAt(newX, newY);
+    if (targets.length > 0) {
+        return new ShockAction(targets[0]);
+    } else {
+        return new WalkAction(newX - this.x, newY - this.y);
+    }
 };
 
 ///////////////////////////////////////////////////////////////////////////
@@ -326,6 +354,22 @@ WaitAction.prototype.perform = function(actor) {
     return null;
 };
 
+var WalkOrFightAction = function(dx, dy) {
+    this.dx = dx;
+    this.dy = dy;
+};
+WalkOrFightAction.prototype.perform = function(actor) {
+    var newX = actor.x + this.dx;
+    var newY = actor.y + this.dy;
+    var actors = Game.actorsAt(newX, newY);
+    for (var i = 0; i < actors.length; ++i) {
+        if (actors[i] instanceof Creature) {
+            return new FightAction(actors[i]);
+        }
+    }
+    return new WalkAction(this.dx, this.dy);
+};
+
 var WalkAction = function(dx, dy) {
     this.dx = dx;
     this.dy = dy;
@@ -334,31 +378,41 @@ WalkAction.prototype.perform = function(actor) {
     /* is there a free space? */
     var newX = actor.x + this.dx;
     var newY = actor.y + this.dy;
-    var newKey = newX + "," + newY;
-    if (!(newKey in Game.map)) {
-        Game.alert("%The bump[s] into a wall.".format(actor));
+    if (Game.map.terrain(newX, newY).blocksWalking) {
+        Game.alert("%The %s into %the.".format(actor, verbs(actor, "bump"), Game.map.terrain(newX, newY)));
     } else {
+        // Multiple creatures can't normally occupy the same space.
         var actors = Game.actorsAt(newX, newY);
-        function isAnimate(a) {
-            return a.the() != 'the banana box';
+        for (var i = 0; i < actors.length; ++i) {
+            if (actors[i] instanceof Creature) {
+                Game.alert("%The %s into %the.".format(actor, verbs(actor, "bump"), actors[i]));
+                return null;
+            }
         }
-        if (actors.some(isAnimate)) {
-            return new WaitAction();
-        } else {
-            actor.x = newX;
-            actor.y = newY;
-            actor.energy -= 100;
-        }
+        // Looks like the move is valid.
+        actor.x = newX;
+        actor.y = newY;
+        actor.energy -= 100;
     }
+    return null;
+};
+
+var FightAction = function(defender) {
+    this.defender = defender;
+};
+FightAction.prototype.perform = function(actor) {
+    Game.alert("%The %s %the!".format(actor, verbs(actor, "hit"), this.defender));
+    actor.energy -= 100;
+    this.defender.getHit(5);
     return null;
 };
 
 var BoxAction = function() {};
 BoxAction.prototype.perform = function(actor) {
-    var key = actor.x + "," + actor.y;
-    if (Game.map[key] != "*") {
+    var itemsHere = Game.actorsAt(actor.x, actor.y);
+    if (!itemsHere.some(function(a) { return a instanceof BananaBox; })) {
         Game.alert("There is no box here!");
-    } else if (key == Game.ananas) {
+    } else if (itemsHere.some(function(a) { return a == Game.ananas; })) {
         Game.alert("Hooray! You found an ananas and won this game.");
         Game.win();
     } else {
@@ -372,8 +426,9 @@ var ShockAction = function(defender) {
     this.defender = defender;
 };
 ShockAction.prototype.perform = function(actor) {
-    Game.alert("%The shocks %the!".format(actor, this.defender));
-    actor.energy -= 50;
+    Game.alert("%The %s %the!".format(actor, verbs(actor, "shock"), this.defender));
+    actor.energy -= 100;
+    this.defender.getHit(1);
     return null;
 };
 
