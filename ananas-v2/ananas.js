@@ -5,6 +5,12 @@ ROT.RNG.getNormalInt = function(min, max) {
     return Math.min(Math.max(min, Math.round(x)), max);
 };
 
+function assert(x, message) {
+    if (!x) {
+        throw message;
+    }
+}
+
 function verbs(subject, verb) {
     if (subject.the() == "you") {
         return verb;
@@ -12,6 +18,17 @@ function verbs(subject, verb) {
         return verb + "s";
     }
 }
+
+var Dir = {
+    NORTH: 'north',
+    SOUTH: 'south',
+    EAST: 'east',
+    WEST: 'west',
+    NE: 'northeast',
+    NW: 'northwest',
+    SE: 'southeast',
+    SW: 'southwest',
+};
 
 var Game = {
     init: function() {
@@ -55,7 +72,11 @@ var Game = {
         this.is_over = false;
         this._hasEverBeenVisible = {};
         this._oldroom = null;
-        this._generateMap();
+        try {
+            this._generateMap();
+        } catch (e) {
+            console.log(e);
+        }
         this._populateMap();
         this.currentActor = 0;
         this.runGameLoopUntilBlocked();
@@ -74,6 +95,7 @@ var Game = {
                 while (action !== null) {
                     action = action.perform(actor);
                 }
+                this.redrawDisplay();
             }
             this.currentActor = (this.currentActor + 1) % this.actors.length;
         }
@@ -141,34 +163,81 @@ var Game = {
             this.alert('Please type RESTART to begin a new game.');
             return;
         }
+        var room = this.map.room(Game.player.x, Game.player.y);
+        assert(room != null);
+        assert(room.centroid.length == 2);
+        assert(room.neighbors);
         switch (text) {
             case 'quit':
                 this.is_over = true;
                 this.alert('Your game has ended. Type RESTART to begin a new game.');
                 return;
+            case 'look':
+                this.alert("You are in %s.".format(this.map.room(this.player.x, this.player.y).description()));
+                return;
             case 'north': case 'n':
-                this.player.setNextAction(new WalkAction(0, -1));
+                if (Dir.NORTH in room.neighbors) {
+                    var [dx,dy] = room.neighbors[Dir.NORTH].centroid;
+                    this.player.setStrategy(new MoveTowardStrategy(dx,dy));
+                } else {
+                    this.alert("You can't go %s from here.".format(Dir.NORTH));
+                }
                 return;
             case 'south': case 's':
-                this.player.setNextAction(new WalkAction(0, 1));
+                if (Dir.SOUTH in room.neighbors) {
+                    var [dx,dy] = room.neighbors[Dir.SOUTH].centroid;
+                    this.player.setStrategy(new MoveTowardStrategy(dx,dy));
+                } else {
+                    this.alert("You can't go %s from here.".format(Dir.SOUTH));
+                }
                 return;
             case 'east': case 'e':
-                this.player.setNextAction(new WalkAction(1, 0));
+                if (Dir.EAST in room.neighbors) {
+                    var [dx,dy] = room.neighbors[Dir.EAST].centroid;
+                    this.player.setStrategy(new MoveTowardStrategy(dx,dy));
+                } else {
+                    this.alert("You can't go %s from here.".format(Dir.EAST));
+                }
                 return;
             case 'west': case 'w':
-                this.player.setNextAction(new WalkAction(-1, 0));
+                if (Dir.WEST in room.neighbors) {
+                    var [dx,dy] = room.neighbors[Dir.WEST].centroid;
+                    this.player.setStrategy(new MoveTowardStrategy(dx,dy));
+                } else {
+                    this.alert("You can't go %s from here.".format(Dir.WEST));
+                }
                 return;
             case 'northwest': case 'nw':
-                this.player.setNextAction(new WalkAction(-1, -1));
+                if (Dir.NW in room.neighbors) {
+                    var [dx,dy] = room.neighbors[Dir.NW].centroid;
+                    this.player.setStrategy(new MoveTowardStrategy(dx,dy));
+                } else {
+                    this.alert("You can't go %s from here.".format(Dir.NW));
+                }
                 return;
             case 'northeast': case 'ne':
-                this.player.setNextAction(new WalkAction(1, -1));
+                if (Dir.NE in room.neighbors) {
+                    var [dx,dy] = room.neighbors[Dir.NE].centroid;
+                    this.player.setStrategy(new MoveTowardStrategy(dx,dy));
+                } else {
+                    this.alert("You can't go %s from here.".format(Dir.NE));
+                }
                 return;
             case 'southwest': case 'sw':
-                this.player.setNextAction(new WalkAction(-1, 1));
+                if (Dir.SW in room.neighbors) {
+                    var [dx,dy] = room.neighbors[Dir.SW].centroid;
+                    this.player.setStrategy(new MoveTowardStrategy(dx,dy));
+                } else {
+                    this.alert("You can't go %s from here.".format(Dir.SW));
+                }
                 return;
             case 'southeast': case 'se':
-                this.player.setNextAction(new WalkAction(1, 1));
+                if (Dir.SE in room.neighbors) {
+                    var [dx,dy] = room.neighbors[Dir.SE].centroid;
+                    this.player.setStrategy(new MoveTowardStrategy(dx,dy));
+                } else {
+                    this.alert("You can't go %s from here.".format(Dir.SE));
+                }
                 return;
             case 'open box': case 'search': case 'search box':
                 this.player.setNextAction(new BoxAction());
@@ -235,7 +304,7 @@ var Game = {
         fov.compute(this.player.x, this.player.y, 100, function(x, y, r, visibility) {
             visibleSquares[x+','+y] = (visibility > 0.5);
         });
-        function isVisible(x, y) { return (x+','+y) in visibleSquares; }
+        function isVisible(x, y) { return true || (x+','+y) in visibleSquares; }
 
         for (var x = 0; x < this.map.width; ++x) {
             for (var y = 0; y < this.map.height; ++y) {
@@ -278,7 +347,9 @@ var Actor = function(x, y) {
     this.y = y || 0;
     this.energy = 0;
     this.displayPriority = 0;
+    this._strategy = null;
 };
+Actor.prototype.setStrategy = function(strategy) { this._strategy = strategy; };
 Actor.prototype.canSee = function(actor) {
     var result = false;
     var fov = new ROT.FOV.PreciseShadowcasting(Game.map.lightPassesCallback.bind(Game.map));
@@ -325,9 +396,48 @@ Player.prototype.getAppearance = function() { return ['@', '#ff0', '#000']; };
 Player.prototype.getSpeed = function() { return 10; };
 Player.prototype.setNextAction = function(action) { this._action = action; };
 Player.prototype.getNextAction = function() {
+    console.log('Player.prototype.getNextAction');
     var action = this._action;
+    if (this._strategy != null) {
+        action = this._strategy.getNextAction(this);
+        if (action == null) {
+            this._strategy = null;
+        }
+    }
     this._action = null;
     return action;
+};
+
+var MoveTowardStrategy = function(x,y) {
+    this.x = x;
+    this.y = y;
+
+    var isPassable = function(x, y) {
+        return !Game.map.terrain(x, y).blocksWalking;
+    }
+    this.astar = new ROT.Path.AStar(this.x, this.y, isPassable, {topology:8});
+};
+MoveTowardStrategy.prototype.getNextAction = function(actor) {
+    console.log('MoveTowardStrategy.prototype.getNextAction');
+
+    if (actor.x == this.x && actor.y == this.y) {
+        return null;
+    }
+
+    var path = [];
+    this.astar.compute(actor.x, actor.y, function(x, y) {
+        path.push([x, y]);
+    });
+
+    if (path.length == 0) {
+        if (actor == Game.player) {
+            Game.alert("Sorry, I don't know how to get there from here.");
+        }
+        return null;
+    }
+    assert(path[0][0] == actor.x && path[0][1] == actor.y);
+    assert(path[1][0] != actor.x || path[1][1] != actor.y);
+    return new WalkAction(path[1][0] - actor.x, path[1][1] - actor.y);
 };
 
 var BananaBox = function(x, y) {
@@ -410,6 +520,7 @@ WalkAction.prototype.perform = function(actor) {
     var newY = actor.y + this.dy;
     if (Game.map.terrain(newX, newY).blocksWalking) {
         Game.alert("%The %s into %the.".format(actor, verbs(actor, "bump"), Game.map.terrain(newX, newY)));
+        actor.setStrategy(null);
     } else {
         // Multiple creatures can't normally occupy the same space.
         var actors = Game.actorsAt(newX, newY);
@@ -418,6 +529,7 @@ WalkAction.prototype.perform = function(actor) {
                 if (Game.player.canSee(actor) && Game.player.canSee(actors[i])) {
                     Game.alert("%The %s into %the.".format(actor, verbs(actor, "bump"), actors[i]));
                 }
+                actor.setStrategy(null);
                 return null;
             }
         }

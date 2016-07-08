@@ -27,7 +27,11 @@ Map.prototype.clear = function() {
     }
 };
 Map.prototype.room = function(x,y) {
-    return this._room[x + ',' + y];
+    var result = this._room[x + ',' + y];
+    if (result != null) {
+        assert(this.terrain(x,y).name != 'wall', 'x='+x+',y='+y+',terrain='+this.terrain(x,y).name);
+    }
+    return result;
 };
 Map.prototype.terrain = function(x,y) {
     return this._terrain[x + ',' + y];
@@ -118,9 +122,13 @@ Map.prototype.generateDungeon = function() {
         }
     }
     // Remove dead ends from the maze.
+    console.log('Remove dead ends from the maze');
+    var get_adjacent_coords = function(x,y) {
+        return [[x+1,y], [x-1,y], [x,y+1], [x,y-1]];
+    };
     var count_adjacent_nonwalls = function(x,y) {
         var count = 0;
-        var adjs = [[x+1,y], [x-1,y], [x,y+1], [x,y-1]];
+        var adjs = get_adjacent_coords(x,y);
         for (var i=0; i < 4; ++i) {
             var [x1,y1] = adjs[i];
             if (this.valid(x1,y1) && this.terrain(x1,y1).name != 'wall') ++count;
@@ -133,6 +141,7 @@ Map.prototype.generateDungeon = function() {
             for (var x = 0; x < this.width; ++x) {
                 if (this.terrain(x,y).name != 'wall' && count_adjacent_nonwalls(x,y) == 1) {
                     this._terrain[x + ',' + y] = new Terrain('wall');
+                    this._room[x + ',' + y] = null;
                     didsomething = true;
                 }
             }
@@ -142,42 +151,42 @@ Map.prototype.generateDungeon = function() {
         }
     }
     // TODO: Try to sprout new features off from the existing map.
+
+    // ...
+
     // Classify corridors and intersections.
-    while (true) {
-        var didsomething = false;
-        for (var y = 0; y < this.height; ++y) {
-            for (var x = 0; x < this.width; ++x) {
-                if (this.terrain(x,y).name != 'floor') continue;
-                if (this.room(x,y) != null) continue;
-                // Okay, this must be a new corridor.
-                var corridor = new Corridor();
-                this._rooms.push(corridor);
-                var passable = function(x,y) {
-                    return this.valid(x,y) && this._room[x+','+y] == null && count_adjacent_nonwalls(x,y) == 2;
-                };
-                var action = function(x,y) {
-                    this._room[x + ',' + y] = corridor;
-                    corridor._coords.push([x,y]);
-                }
-                action.bind(this)(x,y);
-                this._flood_fill(x,y, passable.bind(this), action.bind(this));
-                if (corridor.getAllInternalCoords().length == 1) {
-                    corridor.markAsIntersection();
+    console.log('Classify corridors and intersections');
+    for (var y = 0; y < this.height; ++y) {
+        for (var x = 0; x < this.width; ++x) {
+            if (this.terrain(x,y).name == 'floor' && this.room(x,y) == null) {
+                var adjacent_floors = count_adjacent_nonwalls(x,y);
+                if (adjacent_floors == 2) {
+                    // Okay, this must be a new corridor.
+                    var corridor = new Corridor(x,y);
+                    this._rooms.push(corridor);
+                    var passable = function(x,y) {
+                        return this.valid(x,y) && this.room(x,y) == null && this.terrain(x,y).name != 'wall' && count_adjacent_nonwalls(x,y) == 2;
+                    }.bind(this);
+                    var action = function(x,y) {
+                        this._room[x + ',' + y] = corridor;
+                    }.bind(this);
+                    action(x,y);
+                    this._flood_fill(x,y, passable, action);
+                } else {
+                    var intersection = new Intersection(x,y);
+                    this._rooms.push(intersection);
+                    this._room[x+','+y] = intersection;
                 }
             }
-        }
-        if (!didsomething) {
-            break;
         }
     }
     // Subsume each door into one of its neighboring rooms.
     // This gets rid of one-cell "corridors" between rooms.
-    // Past this point, the "coords" of rooms and corridors are meaningless;
-    // this._room is the only source of truth about what-tiles-belong-to-which-rooms.
+    console.log('Subsume doors into rooms');
     for (var y = 0; y < this.height; ++y) {
         for (var x = 0; x < this.width; ++x) {
             if (this.terrain(x,y).name != 'door') continue;
-            var adjs = [[x+1,y], [x-1,y], [x,y+1], [x,y-1]];
+            var adjs = get_adjacent_coords(x,y);
             for (var i=0; i < 4; ++i) {
                 var [x1,y1] = adjs[i];
                 if (this.valid(x1,y1) && (this.room(x1,y1) instanceof Room)) {
@@ -187,13 +196,171 @@ Map.prototype.generateDungeon = function() {
             }
         }
     }
-
     // TODO: Produce the neighboring-rooms-and-corridors graph.
     // Each room in this._rooms should have a notion of which other
     // rooms are "adjacent" to it, and in which semicardinal "direction"
-    // each of its neighbors is.
-    for (var i=0; i < this._rooms.length; ++i) {
-        var room = this._rooms[i];
+    // each of its neighbors is. The algorithm is just to iterate over
+    // the Rooms and Intersections and look for their exits.
+    console.log('Get neighbors of rooms');
+    for (var ri = 0; ri < this._rooms.length; ++ri) {
+        var room = this._rooms[ri];
+        if (room instanceof Room) {
+            var northern_neighbors = [];
+            var southern_neighbors = [];
+            var eastern_neighbors = [];
+            var western_neighbors = [];
+            for (var x = 0; x < room.width; ++x) {
+                if (this.terrain(room._x + x, room._y - 1).name == 'door') {
+                    var r = this.room(room._x + x, room._y - 1);
+                    if (r == room) { r = this.room(room._x + x, room._y - 2); }
+                    northern_neighbors.push(r);
+                }
+                if (this.terrain(room._x + x, room._y + room.height).name == 'door') {
+                    var r = this.room(room._x + x, room._y + room.height);
+                    if (r == room) { r = this.room(room._x + x, room._y + room.height + 1); }
+                    southern_neighbors.push(r);
+                }
+            }
+            for (var y = 0; y < room.height; ++y) {
+                if (this.terrain(room._x - 1, room._y + y).name == 'door') {
+                    var r = this.room(room._x - 1, room._y + y);
+                    if (r == room) { r = this.room(room._x - 2, room._y + y); }
+                    western_neighbors.push(r);
+                }
+                if (this.terrain(room._x + room.width, room._y + y).name == 'door') {
+                    var r = this.room(room._x + room.width, room._y + y);
+                    if (r == room) { r = this.room(room._x + room.width + 1, room._y + y); }
+                    eastern_neighbors.push(r);
+                }
+            }
+            var populate = function(nn, card, semi1, semi2) {
+                if (nn.length == 0) {
+                    // do nothing
+                } else if (nn.length == 1) {
+                    room.neighbors[card] = nn[0];
+                } else if (nn.length == 2) {
+                    room.neighbors[semi1] = nn[0];
+                    room.neighbors[semi2] = nn[1];
+                } else {
+                    room.neighbors[semi1] = nn[0];
+                    room.neighbors[card] = nn[1];
+                    room.neighbors[semi2] = nn[2];
+                }
+            };
+            populate(northern_neighbors, Dir.NORTH, Dir.NW, Dir.NE);
+            populate(southern_neighbors, Dir.SOUTH, Dir.SW, Dir.SE);
+            populate(eastern_neighbors, Dir.EAST, Dir.NE, Dir.SE);
+            populate(western_neighbors, Dir.WEST, Dir.NW, Dir.SW);
+        } else if (room instanceof Intersection) {
+            var [x,y] = room.centroid;
+            assert(this.room(x,y) == room);
+            var adjs = [[x+1,y,Dir.EAST,Dir.WEST], [x-1,y,Dir.WEST,Dir.EAST], [x,y+1,Dir.SOUTH,Dir.NORTH], [x,y-1,Dir.NORTH,Dir.SOUTH]];
+            for (var i=0; i < 4; ++i) {
+                var [x1,y1,d01,d10] = adjs[i];
+                if (!this.valid(x1,y1)) continue;
+                var r1 = this.room(x1,y1);
+                if (r1 != null) {
+                    room.neighbors[d01] = r1;
+                    r1.neighbors[d10] = room;
+                }
+            }
+        } else if (room instanceof Corridor) {
+            var [x,y] = [room._x, room._y];
+            assert(this.room(x,y) == room);
+            var [ox,oy] = [x,y];
+            var n1 = null;
+            while (true) {
+                var moved = false;
+                var adjs = get_adjacent_coords(x,y);
+                for (var i=0; i < 4; ++i) {
+                    var [nx,ny] = adjs[i];
+                    if ((nx != ox || ny != oy) && this.valid(nx,ny)) {
+                        if (this.room(nx,ny) == room) {
+                            [ox,oy] = [x,y];
+                            [x,y] = [nx,ny];
+                            moved = true;
+                            break;
+                        } else if (this.room(nx,ny) != null) {
+                            n1 = this.room(nx,ny);
+                        }
+                    }
+                }
+                if (!moved) break;
+            }
+            assert(n1 != null);
+            assert(!(n1 instanceof Corridor));
+            // We've found one endpoint of the corridor.
+            var [e1x,e1y] = [x,y];
+            [ox,oy] = [x,y];
+            var n2 = null;
+            var corridor_length = 1;
+            while (true) {
+                var moved = false;
+                var adjs = get_adjacent_coords(x,y);
+                for (var i=0; i < 4; ++i) {
+                    var [nx,ny] = adjs[i];
+                    if ((nx != ox || ny != oy) && this.valid(nx,ny)) {
+                        if (this.room(nx,ny) == room) {
+                            [ox,oy] = [x,y];
+                            [x,y] = [nx,ny];
+                            corridor_length += 1;
+                            moved = true;
+                            break;
+                        } else if (this.room(nx,ny) != null) {
+                            n2 = this.room(nx,ny);
+                        }
+                    }
+                }
+                if (!moved) break;
+            }
+            // We've found the other end, and the length.
+            assert(n2 != null);
+            assert(!(n2 instanceof Corridor));
+            var [e2x,e2y] = [x,y];
+            // Now start at end 2, and take length/2 steps toward end 1.
+            var steps = Math.floor(corridor_length/2);
+            [ox,oy] = [x,y];
+            while (steps != 0) {
+                var moved = false;
+                var adjs = [[x+1,y,Dir.WEST,Dir.EAST], [x-1,y,Dir.EAST,Dir.WEST], [x,y+1,Dir.NORTH,Dir.SOUTH], [x,y-1,Dir.SOUTH,Dir.NORTH]];
+                for (var i=0; i < 4; ++i) {
+                    var [nx,ny,dir2,dir1] = adjs[i];
+                    if ((nx != ox || ny != oy) && this.valid(nx,ny) && this.room(nx,ny) == room) {
+                        [ox,oy] = [x,y];
+                        [x,y] = [nx,ny];
+                        steps -= 1;
+                        moved = true;
+                        if (steps == 0) {
+                            assert(n2 != null);
+                            room.neighbors[dir2] = n2;
+                            var badjs = [[x+1,y,Dir.WEST,Dir.EAST], [x-1,y,Dir.EAST,Dir.WEST], [x,y+1,Dir.NORTH,Dir.SOUTH], [x,y-1,Dir.SOUTH,Dir.NORTH]];
+                            for (var bi=0; bi < 4; ++bi) {
+                                [nx,ny,dir2,dir1] = badjs[bi];
+                                if ((nx != ox || ny != oy) && this.valid(nx,ny) && this.room(nx,ny) == room) {
+                                    assert(n1 != null);
+                                    room.neighbors[dir1] = n1;
+                                    break;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+                if (!moved) break;
+            }
+            room.centroid = [x,y];
+            room.corridor_length = corridor_length;
+            assert(this.room(x,y) == room);
+            assert(Object.keys(this.neighbors).length == 2);
+        }
+    }
+    console.log('Sanity-check all the rooms before finishing');
+    for (var ri = 0; ri < this._rooms.length; ++ri) {
+        var room = this._rooms[ri];
+        assert(room.centroid.length == 2);
+        for (key in room.neighbors) {
+            assert(room.neighbors[key] instanceof Room || room.neighbors[key] instanceof Intersection || room.neighbors[key] instanceof Corridor, room.neighbors[key]);
+        }
     }
 };
 Map.prototype._flood_fill = function(x,y, passable, action) {
@@ -207,51 +374,65 @@ Map.prototype._flood_fill = function(x,y, passable, action) {
     }
 };
 
-var Corridor = function() {
-    this._coords = [];
-    this._isIntersection = false;
-};
-Corridor.prototype.markAsIntersection = function() {
-    this._isIntersection = true;
+var Corridor = function(x,y) {
+    this._x = x;
+    this._y = y;
+    this.centroid = null;
+    this.neighbors = {};
+    this.corridor_length = null;
 };
 Corridor.prototype.description = function() {
-    if (this._isIntersection) {
-        return 'an intersection of two corridors';
+    var dirs = Object.keys(this.neighbors);
+    assert(dirs.length == 2);
+    assert(this.corridor_length != null);
+    if (this.corridor_length <= 2) {
+        return 'a short corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
+    } else if (this.corridor_length <= 7) {
+        return 'a corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
     } else {
-        return 'a corridor';
+        return 'a long and winding corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
     }
 };
-Corridor.prototype.getAllInternalCoords = function() {
-    return this._coords.slice();
+
+var Intersection = function(x,y) {
+    this.centroid = [x,y];
+    this.neighbors = {};
 };
-Corridor.prototype.getAllInternalAndBorderingCoords = function() {
-    var result = {};
-    for (var i=0; i < this._coords.length; ++i) {
-        var [x,y] = this._coords[i];
-        result[(x-1) + ',' + (y-1)] = true;
-        result[(x-1) + ',' + y] = true;
-        result[(x-1) + ',' + (y+1)] = true;
-        result[x + ',' + (y-1)] = true;
-        result[x + ',' + y] = true;
-        result[x + ',' + (y+1)] = true;
-        result[(x+1) + ',' + (y-1)] = true;
-        result[(x+1) + ',' + y] = true;
-        result[(x+1) + ',' + (y+1)] = true;
+Intersection.prototype.description = function() {
+    if (Dir.NORTH in this.neighbors && Dir.SOUTH in this.neighbors) {
+        if (Dir.EAST in this.neighbors) {
+            if (Dir.WEST in this.neighbors) {
+                return 'the intersection of a north-south corridor and an east-west corridor';
+            } else {
+                return 'the intersection of a north-south corridor with a corridor leading east';
+            }
+        } else if (Dir.WEST in this.neighbors) {
+            return 'the intersection of a north-south corridor with a corridor leading west';
+        } else {
+            assert(false);
+        }
+    } else if (Dir.EAST in this.neighbors && Dir.WEST in this.neighbors) {
+        if (Dir.NORTH in this.neighbors) {
+            assert(!(Dir.SOUTH in this.neighbors));
+            return 'the intersection of an east-west corridor with a corridor leading north';
+        } else if (Dir.SOUTH in this.neighbors) {
+            return 'the intersection of an east-west corridor with a corridor leading south';
+        } else {
+            assert(false);
+        }
+    } else {
+        assert(false);
     }
-    var result2 = [];
-    for (key in result) {
-        var parts = key.split(",");
-        var x = parseInt(parts[0]);
-        var y = parseInt(parts[1]);
-        result2.push([x,y]);
-    }
-    return result2;
+    return 'an intersection';
 };
+
 var Room = function(x, y, width, height) {
     this._x = x;
     this._y = y;
     this.width = width;
     this.height = height;
+    this.centroid = [this._x + Math.floor(this.width / 2), this._y + Math.floor(this.height / 2)];
+    this.neighbors = {};
 };
 Room.prototype.description = function() {
     var size = 'small';
