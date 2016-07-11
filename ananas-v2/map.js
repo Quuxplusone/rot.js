@@ -124,7 +124,7 @@ Map.prototype.generateDungeon = function() {
     // Remove dead ends from the maze.
     console.log('Remove dead ends from the maze');
     var get_adjacent_coords = function(x,y) {
-        return [[x+1,y], [x-1,y], [x,y+1], [x,y-1]];
+        return [[x+1,y,Dir.EAST,Dir.WEST], [x-1,y,Dir.WEST,Dir.EAST], [x,y+1,Dir.SOUTH,Dir.NORTH], [x,y-1,Dir.NORTH,Dir.SOUTH]];
     };
     var count_adjacent_nonwalls = function(x,y) {
         var count = 0;
@@ -256,102 +256,117 @@ Map.prototype.generateDungeon = function() {
             assert(this.room(x,y) == room);
             var adjs = [[x+1,y,Dir.EAST,Dir.WEST], [x-1,y,Dir.WEST,Dir.EAST], [x,y+1,Dir.SOUTH,Dir.NORTH], [x,y-1,Dir.NORTH,Dir.SOUTH]];
             for (var i=0; i < 4; ++i) {
-                var [x1,y1,d01,d10] = adjs[i];
+                var [x1,y1,d1] = adjs[i];
                 if (!this.valid(x1,y1)) continue;
                 var r1 = this.room(x1,y1);
                 if (r1 != null) {
-                    room.neighbors[d01] = r1;
-                    r1.neighbors[d10] = room;
+                    room.neighbors[d1] = r1;
                 }
             }
         } else if (room instanceof Corridor) {
-            var [x,y] = [room._x, room._y];
-            assert(this.room(x,y) == room);
-            var [ox,oy] = [x,y];
-            var n1 = null;
-            while (true) {
-                var moved = false;
+            // Find the two endpoints of this corridor.
+            // Notice that some corridors are only 1 tile long, so they have only one "endpoint".
+            var count_adjacent_corridors = function(x,y) {
+                var count = 0;
                 var adjs = get_adjacent_coords(x,y);
                 for (var i=0; i < 4; ++i) {
-                    var [nx,ny] = adjs[i];
-                    if ((nx != ox || ny != oy) && this.valid(nx,ny)) {
-                        if (this.room(nx,ny) == room) {
-                            [ox,oy] = [x,y];
-                            [x,y] = [nx,ny];
-                            moved = true;
-                            break;
-                        } else if (this.room(nx,ny) != null) {
-                            n1 = this.room(nx,ny);
-                        }
-                    }
+                    var [x1,y1] = adjs[i];
+                    if (this.valid(x1,y1) && this.room(x1,y1) == room) ++count;
                 }
-                if (!moved) break;
-            }
-            assert(n1 != null);
-            assert(!(n1 instanceof Corridor));
-            // We've found one endpoint of the corridor.
-            var [e1x,e1y] = [x,y];
-            [ox,oy] = [x,y];
-            var n2 = null;
-            var corridor_length = 1;
-            while (true) {
-                var moved = false;
-                var adjs = get_adjacent_coords(x,y);
-                for (var i=0; i < 4; ++i) {
-                    var [nx,ny] = adjs[i];
-                    if ((nx != ox || ny != oy) && this.valid(nx,ny)) {
-                        if (this.room(nx,ny) == room) {
-                            [ox,oy] = [x,y];
-                            [x,y] = [nx,ny];
-                            corridor_length += 1;
-                            moved = true;
-                            break;
-                        } else if (this.room(nx,ny) != null) {
-                            n2 = this.room(nx,ny);
-                        }
-                    }
-                }
-                if (!moved) break;
-            }
-            // We've found the other end, and the length.
-            assert(n2 != null);
-            assert(!(n2 instanceof Corridor));
-            var [e2x,e2y] = [x,y];
-            // Now start at end 2, and take length/2 steps toward end 1.
-            var steps = Math.floor(corridor_length/2);
-            [ox,oy] = [x,y];
-            while (steps != 0) {
-                var moved = false;
-                var adjs = [[x+1,y,Dir.WEST,Dir.EAST], [x-1,y,Dir.EAST,Dir.WEST], [x,y+1,Dir.NORTH,Dir.SOUTH], [x,y-1,Dir.SOUTH,Dir.NORTH]];
-                for (var i=0; i < 4; ++i) {
-                    var [nx,ny,dir2,dir1] = adjs[i];
-                    if ((nx != ox || ny != oy) && this.valid(nx,ny) && this.room(nx,ny) == room) {
-                        [ox,oy] = [x,y];
-                        [x,y] = [nx,ny];
-                        steps -= 1;
-                        moved = true;
-                        if (steps == 0) {
-                            assert(n2 != null);
-                            room.neighbors[dir2] = n2;
-                            var badjs = [[x+1,y,Dir.WEST,Dir.EAST], [x-1,y,Dir.EAST,Dir.WEST], [x,y+1,Dir.NORTH,Dir.SOUTH], [x,y-1,Dir.SOUTH,Dir.NORTH]];
-                            for (var bi=0; bi < 4; ++bi) {
-                                [nx,ny,dir2,dir1] = badjs[bi];
-                                if ((nx != ox || ny != oy) && this.valid(nx,ny) && this.room(nx,ny) == room) {
-                                    assert(n1 != null);
-                                    room.neighbors[dir1] = n1;
-                                    break;
-                                }
+                return count;
+            }.bind(this);
+            var [e1x,e1y] = [null,null];
+            var [e2x,e2y] = [null,null];
+            for (var x = 0; x < this.width; ++x) {
+                for (var y = 0; y < this.height; ++y) {
+                    if (this.room(x,y) == room) {
+                        var count = count_adjacent_corridors(x,y);
+                        if (count == 0) {
+                            // It's a 1-tile corridor.
+                            [e1x,e1y] = [x,y];
+                            [e2x,e2y] = [x,y];
+                        } else if (count == 1) {
+                            if (e1x == null) {
+                                [e1x,e1y] = [x,y];
+                            } else {
+                                assert(e2x == null);
+                                [e2x,e2y] = [x,y];
                             }
                         }
+                    }
+                }
+            }
+            assert(e1x != null && e2x != null, 'bad es');
+
+            var [n1,dir1] = [null,null];
+            var [n2,dir2] = [null,null];
+            var adjs = get_adjacent_coords(e1x,e1y);
+            for (var i=0; i < 4; ++i) {
+                var [x1,y1,d1] = adjs[i];
+                if (this.valid(x1,y1) && this.room(x1,y1) != null && this.room(x1,y1) != room) {
+                    if (n1 == null) {
+                        n1 = this.room(x1,y1);
+                        dir1 = d1;
+                    } else {
+                        n2 = this.room(x1,y1);
+                        dir2 = d1;
+                    }
+                }
+            }
+            assert(n1 != null && dir1 != null);
+            var adjs = get_adjacent_coords(e2x,e2y);
+            for (var i=0; i < 4; ++i) {
+                var [x1,y1,d1] = adjs[i];
+                if (this.valid(x1,y1) && this.room(x1,y1) != null && this.room(x1,y1) != room) {
+                    if (n1 == null) {
+                        n1 = this.room(x1,y1);
+                        dir1 = d1;
+                    } else {
+                        n2 = this.room(x1,y1);
+                        dir2 = d1;
+                    }
+                }
+            }
+            assert(n1 != null && n2 != null);
+            assert(dir1 != null && dir2 != null);
+            // Step the two endpoints toward each other until they meet.
+            room.corridor_twists = 0;
+            room.corridor_length = 1;
+            while (true) {
+                if (e1x == e2x && e1y == e2y) break;
+                var adjs = get_adjacent_coords(e1x,e1y);
+                for (var i=0; i < 4; ++i) {
+                    var [x1,y1,d1,d2] = adjs[i];
+                    if (d1 != dir1 && this.valid(x1,y1) && this.room(x1,y1) == room) {
+                        [e1x,e1y] = [x1,y1];
+                        if (dir1 != d2) { room.corridor_twists += 1; }
+                        dir1 = d2;
+                        room.corridor_length += 1;
                         break;
                     }
                 }
-                if (!moved) break;
+                if (e1x == e2x && e1y == e2y) break;
+                var adjs = get_adjacent_coords(e2x,e2y);
+                for (var i=0; i < 4; ++i) {
+                    var [x1,y1,d1,d2] = adjs[i];
+                    if (d1 != dir2 && this.valid(x1,y1) && this.room(x1,y1) == room) {
+                        [e2x,e2y] = [x1,y1];
+                        if (dir2 != d2) { room.corridor_twists += 1; }
+                        dir2 = d2;
+                        room.corridor_length += 1;
+                        break;
+                    }
+                }
             }
-            room.centroid = [x,y];
-            room.corridor_length = corridor_length;
-            assert(this.room(x,y) == room);
-            assert(Object.keys(this.neighbors).length == 2);
+            assert(e1x == e2x && e1y == e2y);
+            assert(this.room(e1x,e1y) == room);
+            assert(dir1 != dir2 && dir1 != null && dir2 != null);
+            room.centroid = [e1x,e1y];
+            room.neighbors[dir1] = n1;
+            room.neighbors[dir2] = n2;
+            assert(Object.keys(room.neighbors).length == 2);
+        } else {
+            assert(false, 'Unexpected object type in this._rooms');
         }
     }
     console.log('Sanity-check all the rooms before finishing');
@@ -384,13 +399,24 @@ var Corridor = function(x,y) {
 Corridor.prototype.description = function() {
     var dirs = Object.keys(this.neighbors);
     assert(dirs.length == 2);
+    dirs.sort(Dir.cmp);
     assert(this.corridor_length != null);
-    if (this.corridor_length <= 2) {
-        return 'a short corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
-    } else if (this.corridor_length <= 7) {
-        return 'a corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
+    if (this.corridor_twists >= 3) {
+        if (this.corridor_length <= 2) {
+            return 'a short twisty corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
+        } else if (this.corridor_length <= 7) {
+            return 'a winding corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
+        } else {
+            return 'a long and winding corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
+        }
     } else {
-        return 'a long and winding corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
+        if (this.corridor_length <= 2) {
+            return 'a short corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
+        } else if (this.corridor_length <= 7) {
+            return 'a corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
+        } else {
+            return 'a long corridor with exits to %s and %s'.format(dirs[0], dirs[1]);
+        }
     }
 };
 
@@ -433,16 +459,94 @@ var Room = function(x, y, width, height) {
     this.height = height;
     this.centroid = [this._x + Math.floor(this.width / 2), this._y + Math.floor(this.height / 2)];
     this.neighbors = {};
+
+    ROT.RNG.setSeed(1000 * (this._y * Game.map.width + this._x) + (this.width * 10 + this.height));
+    this._rng = ROT.RNG.clone();
+    this._description = function(r) {
+        var desc = [
+            'a%s room hewn from dark rock',
+            'a%%s room paneled in %s'.format(['sequoia wood', 'dark wood', 'ebony', 'mahogany'].random()),
+            'a%%s room whose walls are inlaid with %s'.format(['silver spirals', 'patterned gold', 'precious gems', 'ebony and ivory'].random()),
+            'a%s room lined with graven images',
+            'a%%s room with %s marks on the walls'.format(['odd', 'disturbing', 'bloody', 'axe', 'pick-axe'].random()),
+            'a%%s room with a %s ceiling'.format(['low', 'high'].random()),
+            'a%%s room smelling of %s'.format(['incense', 'damp moss'].random()),
+            'a%s room covered in beautiful stalactites',
+            'a%s room whose ceiling dips almost to the floor in places',
+            'a%%s room whose walls are covered with %s'.format(['primitive cave drawings', 'masses of ivy', 'glowing moss', 'a thin film of water'].random()),
+            'a%s room',
+        ].random();
+        if (r.width * r.height <= 18) {
+            desc = desc.format([' small', ' cramped', ' tiny'].random());
+        } else if (r.width * r.height <= 44) {
+            desc = desc.format([''].random());
+            desc = desc.replace(/^a, /, 'a ');
+        } else if (r.width * r.height <= 55) {
+            desc = desc.format([' big', ' large'].random());
+        } else {
+            desc = desc.format(['n enormous', 'n immense', ' majestic', ' giant'].random());
+        }
+        return desc;
+    }(this);
 };
 Room.prototype.description = function() {
-    var size = 'small';
-    if (this.width * this.height >= 20) {
-        size = 'normal-sized';
+    var rng = this._rng.clone();
+    var p = rng.getPercentage();
+    var desc = this._description;
+    var allowWith = !(desc.indexOf('with') != -1 || desc.indexOf('whose') != -1);
+
+    var dirs = Object.keys(this.neighbors);
+    dirs.sort(Dir.cmp);
+    assert(dirs.length >= 1);
+    if (dirs.length == 1) {
+        if (rng.getPercentage() < 50 && allowWith) {
+            if (p <= 100) {
+                desc += ' with a%s %s to the %s'.format([' single', ' solitary', ''].random(), ['door', 'exit'].random(), dirs[0]);
+            }
+        } else {
+            if (p < 25) {
+                desc += '. The %s exit is a door to the %s'.format(['sole', 'solitary', 'only'].random(), dirs[0]);
+            } else if (p < 50) {
+                desc += '. The %s exit is to the %s'.format(['sole', 'solitary', 'only'].random(), dirs[0]);
+            } else if (p < 75) {
+                desc += '. The %s exit is %s'.format(['sole', 'solitary', 'only'].random(), dirs[0]);
+            } else {
+                desc += '. A%s door leads %s'.format([' single', ' solitary', ''].random(), dirs[0]);
+            }
+        }
+    } else if (dirs.length == 2) {
+        if (rng.getPercentage() < 50 && allowWith) {
+            if (p < 30) {
+                desc += ' with doors to %s and %s'.format(dirs[0], dirs[1]);
+            } else if (p < 60) {
+                desc += ' with exits to %s and %s'.format(dirs[0], dirs[1]);
+            } else {
+                desc += ' with a door to the %s and another to the %s'.format(dirs[0], dirs[1]);
+            }
+        } else {
+            if (p < 50) {
+                desc += '. %s lead %s and %s'.format(['Doors', 'Exits'].random(), dirs[0], dirs[1]);
+            } else if (p < 70) {
+                desc += '. The only exits are %s and %s'.format(dirs[0], dirs[1]);
+            } else if (p < 80) {
+                desc += '. The only exits are doors leading %s and %s'.format(dirs[0], dirs[1]);
+            } else {
+                desc += '. There is %s to the %s and another to the %s'.format(['a door', 'an exit'].random(), dirs[0], dirs[1]);
+            }
+        }
+    } else {
+        var dirs_as_string = dirs.slice(0,-1).join(', ') + ', and ' + dirs[dirs.length-1];
+        if (rng.getPercentage() < 50 && allowWith) {
+            if (p < 101) {
+                desc += ' with %s to %s'.format(['doors', 'exits'].random(), dirs_as_string);
+            }
+        } else {
+            if (p < 101) {
+                desc += '. %s lead %s'.format(['Doors', 'Exits'].random(), dirs_as_string);
+            }
+        }
     }
-    if (this.width * this.height >= 45) {
-        size = 'large';
-    }
-    return 'a ' + size + ' room';
+    return desc;
 };
 Room.prototype.getAllInternalCoords = function() {
     var result = [];

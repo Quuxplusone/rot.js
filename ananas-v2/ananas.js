@@ -5,11 +5,12 @@ ROT.RNG.getNormalInt = function(min, max) {
     return Math.min(Math.max(min, Math.round(x)), max);
 };
 
-function assert(x, message) {
+var assert = function(x, message) {
+    console.assert(x, message);
     if (!x) {
-        throw message;
+        throw 'assert failed';
     }
-}
+};
 
 function verbs(subject, verb) {
     if (subject.the() == "you") {
@@ -28,7 +29,13 @@ var Dir = {
     NW: 'northwest',
     SE: 'southeast',
     SW: 'southwest',
+    cmp: function(a,b) {
+        a = Dir.canonical_order.indexOf(a);
+        b = Dir.canonical_order.indexOf(b);
+        return (a < b) ? -1 : (a > b) ? +1 : 0;
+    },
 };
+Dir.canonical_order = [Dir.NORTH, Dir.SOUTH, Dir.EAST, Dir.WEST, Dir.NE, Dir.NW, Dir.SE, Dir.SW];
 
 var Game = {
     init: function() {
@@ -71,13 +78,14 @@ var Game = {
         this.legend.scrollTop = this.legend.scrollHeight;
         this.is_over = false;
         this._hasEverBeenVisible = {};
-        this._oldroom = null;
         try {
             this._generateMap();
         } catch (e) {
             console.log(e);
         }
         this._populateMap();
+        this._oldroom = this.map.room(this.player.x, this.player.y);
+        this.alert("You wake up, somewhat disoriented, in %s.".format(this._oldroom.description()));
         this.currentActor = 0;
         this.runGameLoopUntilBlocked();
     },
@@ -168,11 +176,11 @@ var Game = {
         assert(room.centroid.length == 2);
         assert(room.neighbors);
         switch (text) {
-            case 'quit':
+            case 'quit': case 'q':
                 this.is_over = true;
                 this.alert('Your game has ended. Type RESTART to begin a new game.');
                 return;
-            case 'look':
+            case 'look': case 'l':
                 this.alert("You are in %s.".format(this.map.room(this.player.x, this.player.y).description()));
                 return;
             case 'north': case 'n':
@@ -272,19 +280,6 @@ var Game = {
     _populateMap: function() {
         var freeCells = this.map.getAllPassableCoordinates();
         this.player = this._createBeing(Player, freeCells);
-        this._createBeing(GridBug, freeCells);
-        this._createBeing(GridBug, freeCells);
-        this._createBeing(GridBug, freeCells);
-        this._createBeing(BananaBox, freeCells);
-        this._createBeing(BananaBox, freeCells);
-        this._createBeing(BananaBox, freeCells);
-        this._createBeing(BananaBox, freeCells);
-        this._createBeing(BananaBox, freeCells);
-        this._createBeing(BananaBox, freeCells);
-        this._createBeing(BananaBox, freeCells);
-        this._createBeing(BananaBox, freeCells);
-        this._createBeing(BananaBox, freeCells);
-        this.ananas = this._createBeing(BananaBox, freeCells);
     },
 
     _createBeing: function(what, freeCells) {
@@ -439,14 +434,6 @@ MoveTowardStrategy.prototype.getNextAction = function(actor) {
     assert(path[1][0] != actor.x || path[1][1] != actor.y);
     return new WalkAction(path[1][0] - actor.x, path[1][1] - actor.y);
 };
-
-var BananaBox = function(x, y) {
-    Item.call(this, x, y);
-    this.displayPriority = 1;
-};
-BananaBox.prototype = new Item();
-BananaBox.prototype.the = function() { return "the banana box"; };
-BananaBox.prototype.getAppearance = function() { return ['`']; };
 
 var GridBug = function(x, y) {
     Creature.call(this, x, y);
