@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <script src="https://ondras.github.io/rot.js/rot.js"></script>
+        <script src="./coord.js"></script>
+        <script src="./astar.js"></script>
+        <script src="./actor.js"></script>
+        <script src="./item.js"></script>
+        <script src="./creature.js"></script>
+        <script src="./dinos.js"></script>
+        <script src="./actions.js"></script>
+        <script src="./strategies.js"></script>
+        <script src="./map.js"></script>
+        <script src="./game.js"></script>
+        <link href="./jp.css" rel="stylesheet" type="text/css"/>
+	<link href="http://fonts.googleapis.com/css?family=PT+Mono|Merienda|Droid+Sans+Mono&subset=latin,latin-ext" rel="stylesheet" type="text/css"/>
+
+        <title>Jurassic Park Ranger</title>
+    </head>
+    <body>
+        <div id="level" tabindex="0"></div>
+        <div id="legend" onclick="document.getElementById('adventure_input').focus(); return false;">
+            <p id="prompt"><span>&gt;&nbsp;</span><input id="adventure_input" tabindex="1"></input></p>
+        </div>
+    </body>
+</html>

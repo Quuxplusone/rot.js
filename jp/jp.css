@@ -1,0 +1,56 @@
+html, body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    background-color: #000;
+    font-family: droid sans mono, monospace;
+    color: #b82;
+    overflow: hidden;
+}
+
+#level {
+    position: absolute;
+    overflow: hidden;
+    width: 80%;
+    height: 60%;
+    right: 0;
+    top: 5%;
+}
+
+#legend {
+    position: absolute;
+    overflow-y: auto;
+    width: 80%;
+    height: 30%;
+    right: 0;
+    bottom: 5%;
+    color: #777;
+}
+
+#legend p {
+    margin: 0pt;
+}
+
+#adventure_input {
+    background: none;
+    border: 0;
+    color: inherit;
+    display: inline;
+    font: inherit;
+    outline: none;
+    padding: 0;
+}
+
+#prompt {
+    color: #77f;
+}
+
+.copy-of-user-input {
+    color: #77a;
+}
+
+*:focus {
+    outline: none;
+}
