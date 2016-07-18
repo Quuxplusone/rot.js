@@ -26,6 +26,8 @@ function createGrid(x, y, f) {
 function verbs(subject, verb) {
     if (subject.the() == "you") {
         return verb;
+    } else if (verb.endsWith('h')) {
+        return verb + "es";
     } else {
         return verb + "s";
     }
@@ -49,14 +51,39 @@ var Game = {
             Game.runGameLoopUntilBlocked();
         });
         this.adventure_input.addEventListener("keyup", function(e) {
+            this.undo_buffer = this.undo_buffer || [''];
+            this.undo_buffer_pos = this.undo_buffer_pos || 0;
             if (e.keyCode == ROT.VK_RETURN) {
                 var text = Game.adventure_input.value;
                 Game.adventure_input.value = '';
                 if (text.trim() !== '') {
+                    if (this.undo_buffer.length==1 || text != this.undo_buffer[this.undo_buffer.length-2]) {
+                        this.undo_buffer[this.undo_buffer.length-1] = text;  // replace the command that was in progress
+                        this.undo_buffer.push('');  // start a new command in progress
+                    }
+                    if (this.undo_buffer.length > 50) {
+                        this.undo_buffer.shift();  // just to keep it from growing without bound
+                    }
                     Game.alert('> ' + text, {userinput: true});
                     Game.parseAdventureInput(text);
                 }
+                this.undo_buffer_pos = this.undo_buffer.length-1;
                 Game.runGameLoopUntilBlocked();
+            } else if (e.keyCode == ROT.VK_UP) {
+                if (this.undo_buffer_pos == this.undo_buffer.length-1) {
+                    this.undo_buffer[this.undo_buffer_pos] = Game.adventure_input.value;  // save the command in progress
+                }
+                if (this.undo_buffer_pos != 0) {
+                    this.undo_buffer_pos -= 1;
+                    Game.adventure_input.value = this.undo_buffer[this.undo_buffer_pos];
+                }
+            } else if (e.keyCode == ROT.VK_DOWN) {
+                if (this.undo_buffer_pos < this.undo_buffer.length-1) {
+                    this.undo_buffer_pos += 1;
+                    Game.adventure_input.value = this.undo_buffer[this.undo_buffer_pos];
+                }
+            } else {
+                this.undo_buffer_pos = this.undo_buffer.length-1;
             }
         });
 
@@ -89,16 +116,19 @@ var Game = {
             if (!actor.currentlyVisibleToPlayer && actor.manhattanDistanceTo(Game.player) > 40) {
                 // Skip this actor, for speed.
             } else {
-            actor.energy += actor.getSpeed();
+                if (actor.energy < 100) {
+                    actor.energy = Math.min(actor.energy + actor.getSpeed(), 100);
+                    actor.hp = Math.min(actor.hp + actor.maxhp/1000, actor.maxhp);  // regenerate some HP
+                }
                 if (actor.energy >= 100) {
-                    actor.energy = 100;
                     var action = actor.getNextAction();
-                    if (action === null) {
-                        console.log('%The returned a null action'.format(actor));
+                    assert(action !== undefined, actor.the());
+                    if (action == null) {
                         break;
                     }
-                    while (action !== null) {
+                    while (action != null) {
                         action = action.perform(actor);
+                        assert(action !== undefined);
                     }
                 }
             }
@@ -108,6 +138,10 @@ var Game = {
     },
 
     win: function() {
+        Game.is_over = true;
+    },
+
+    lose: function() {
         Game.is_over = true;
     },
 
@@ -128,11 +162,21 @@ var Game = {
     setPlayer: function(actor) {
         this.player = actor;
         actor.the = function() { return "you"; };
+        actor._getAppearance = actor.getAppearance;
+        actor.getAppearance = function() {
+            var [g, fg, bg] = this._getAppearance.call(this);
+            if (Game.is_over) {
+                return ['Ω', '#ff0', bg];
+            } else {
+               return [g, '#ff0', bg];
+            }
+        };
         actor.getNextAction = function() {
             Game.redrawDisplay();
             if (this._strategy != null) {
                 var a = this._strategy.getNextAction(this);
-                if (a != null) return a;
+                assert(a !== undefined);
+                if (a !== null) return a;
                 this.setStrategy(null);
                 Game.alert('Your strategy has run out.');
             }
@@ -140,14 +184,20 @@ var Game = {
             this._action = null;
             return a;
         };
-        actor.setNextAction = function(a) {
-            this._action = a;
-        };
+        actor.setNextAction = function(a) { this._action = a; };
+        actor.setNextAction(null);
     },
 
     parseRoguelikeInput: function(key) {
+        this.has_been_over = this.has_been_over || false;
         if (Game.is_over) {
+            if (!this.has_been_over) {
+                Game.alert('Please type RESTART to begin a new game.');
+                this.has_been_over = true;
+            }
             return;
+        } else {
+            this.has_been_over = false;
         }
         switch (key) {
             case ROT.VK_PERIOD:
@@ -169,23 +219,32 @@ var Game = {
         text = text.trim().toLowerCase();
         switch (text) {
             case 'restart':
-                this.newGame();
+                Game.newGame();
                 return;
         }
-        if (this.is_over) {
-            this.alert('Please type RESTART to begin a new game.');
+        if (Game.is_over) {
+            Game.alert('Please type RESTART to begin a new game.');
+            return;
+        }
+        if (text.startsWith('sethp ')) {
+            Game.player.hp = +(text.substring(6));
+            Game.alert('You have %s hit points remaining (out of %s).'.format(Game.player.hp, Game.player.maxhp));
+            //Game.redrawDisplay();
             return;
         }
         switch (text) {
             case 'quit': case 'q':
-                this.is_over = true;
-                this.alert('Your game has ended. Type RESTART to begin a new game.');
+                Game.is_over = true;
+                Game.alert('Your game has ended. Type RESTART to begin a new game.');
                 return;
             case 'explore':
                 Game.player.setStrategy(new ExploreStrategy(Game.player));
                 return;
+            case 'diagnose':
+                Game.alert('You have %s hit points remaining (out of %s).'.format(Math.round(Game.player.hp), Game.player.maxhp));
+                break;
             default:
-                this.alert("I don't understand that.");
+                Game.alert("I don't understand that.");
                 return;
         }
     },
@@ -262,11 +321,17 @@ var Game = {
         return ROT.Color.toHex(ROT.Color.interpolate([64,64,64], ROT.Color.fromString(fg || '#777'), vis));
     },
 
+    interpolateBloodshot: function(color, bloodshotRadius, actualRadius) {
+        var normalized = (actualRadius - bloodshotRadius) * 0.4;
+        var sigmoided = 1 / (1 + Math.exp(-normalized));
+        return ROT.Color.toHex(ROT.Color.interpolate(ROT.Color.fromString(color || '#000'), [200,0,0], sigmoided));
+    },
+
     redrawDisplay: function() {
         var display_width = this.display.getOptions().width;
         var display_height = this.display.getOptions().height;
 
-        // Coordinates of the upper left corner, minus one.
+        // Coordinates of the upper left corner.
         var dx = Math.min(Math.max(0, Game.player.x - Math.floor(display_width/2)), Game.map.width - display_width);
         var dy = Math.min(Math.max(0, Game.player.y - Math.floor(display_height/2)), Game.map.height - display_height);
 
@@ -300,10 +365,23 @@ var Game = {
             this.actors[i].currentlyVisibleToPlayer = false;
         }
 
+        var visThreshold = 0.3 - 0.2*(Game.player.hp / Game.player.maxhp);  // 0.1 but increase as you get hurt
+        var distanceToEdgeOfDisplay = Math.max(
+            Game.player.euclideanDistanceTo({x:dx,y:dy}),
+            Game.player.euclideanDistanceTo({x:dx + display_width, y:dy}),
+            Game.player.euclideanDistanceTo({x:dx, y:dy + display_height}),
+            Game.player.euclideanDistanceTo({x:dx + display_width, y:dy + display_height})
+        );
+        var bloodshotRadius = distanceToEdgeOfDisplay * Game.player.hp / (0.6*Game.player.maxhp);  // at 60% health you start seeing red
+        if (Game.is_over) {
+            bloodshotRadius = Infinity;
+        }
+
         for (var x = dx; x < dx + display_width; ++x) {
             for (var y = dy; y < dy + display_height; ++y) {
                 var vis = getVis(x, y);
-                if (vis >= 0.1) {
+                var [g, fg, bg] = [' ', '#777', '#000'];
+                if (vis >= visThreshold) {
                     var actors = this.actorsAt({x:x,y:y});
                     // TODO: actors can be hard to spot
                     if (actors.length > 0) {
@@ -313,16 +391,17 @@ var Game = {
                             return 0;
                         }
                         actors.sort(keycmp);
-                        var [g, fg, bg] = actors[0].getAppearance();
+                        [g, fg, bg] = actors[0].getAppearance();
                         actors[0].currentlyVisibleToPlayer = true;
-                        this.display.draw(x-dx, y-dy, g, this.interpolateVis(fg, vis), bg);
+                        fg = this.interpolateVis(fg, vis);
                     } else {
-                        var [g, fg, bg] = this.map.terrain(x, y).appearance;
-                        this.display.draw(x-dx, y-dy, g, this.interpolateVis(fg, vis), bg);
+                        [g, fg, bg] = this.map.terrain(x, y).appearance;
+                        fg = this.interpolateVis(fg, vis);
                     }
-                } else {
-                    this.display.draw(x-dx, y-dy, ' ');
                 }
+                fg = this.interpolateBloodshot(fg, bloodshotRadius, Game.player.euclideanDistanceTo({x:x,y:y})-5);
+                bg = this.interpolateBloodshot(bg, bloodshotRadius, Game.player.euclideanDistanceTo({x:x,y:y}));
+                this.display.draw(x-dx, y-dy, g, fg, bg);
             }
         }
     },

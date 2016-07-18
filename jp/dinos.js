@@ -1,11 +1,12 @@
 var Human = function(x, y) {
-    Creature.call(this, x, y);
-    this.hp = 100;
-    this._action = null;
+    Creature.call(this, x, y, 100);
+    this.attacks = {
+        'hit': {strength:function(){ return 2; }},
+    };
 };
 Human.prototype = new Creature();
 Human.prototype.the = function() { return "the park ranger"; };
-Human.prototype.getAppearance = function() { return ['@', '#ff0', '#000']; };
+Human.prototype.getAppearance = function() { return ['@', '#ddd', '#000']; };
 Human.prototype.getSpeed = function() { return 20; };
 Human.prototype.getNextAction = function() {
     var delta = randomDelta();
@@ -25,24 +26,23 @@ Human.prototype.getNextAction = function() {
 };
 
 var Procompsognathus = function(x, y) {
-    Creature.call(this, x, y);
-    this.hp = 10;
+    Creature.call(this, x, y, 10);
+    this.attacks = {
+        'bite': {strength:function(){ return 5; }},
+        'pinch': {strength:function(){ return 1; }},
+    };
     this._speed = ROT.RNG.getUniformInt(7,11);
 };
 Procompsognathus.prototype = new Creature();
 Procompsognathus.prototype.the = function() { return 'the procompsognathus'; };
 Procompsognathus.prototype.getAppearance = function() { return ['c', 'lightgreen']; };
 Procompsognathus.prototype.getSpeed = function() { return this._speed; };
+Procompsognathus.prototype.whenHitBy = function(attacker) {
+    this.setStrategy(new FleeStrategy(attacker));
+};
 Procompsognathus.prototype.getNextAction = function() {
-    var s = null;
-
-    var dangers = Game.actors.filter(function (predator) {
-        return predator instanceof Allosaurus && this.mooreDistanceTo(predator) <= 5 && this.canSee(predator);
-    }.bind(this));
-    if (dangers.length) {
-        s = new FleeStrategy(dangers[0]);
-        this.setStrategy(s);
-    } else {
+    var s = this._strategy;
+    if (this._strategy == null) {
         // Find a "flock" of nearby compys.
         // If there's no compy within 3 spaces, move toward the center of the flock.
         // If there's a compy within 1 space, move away from the center of the flock.
@@ -63,6 +63,15 @@ Procompsognathus.prototype.getNextAction = function() {
         }
     }
     if (s == null) {
+        var dangers = Game.actors.filter(function (predator) {
+            return predator instanceof Allosaurus && this.mooreDistanceTo(predator) <= 5 && this.canSee(predator);
+        }.bind(this));
+        if (dangers.length) {
+            s = new FleeStrategy(dangers[0]);
+            this.setStrategy(s);
+        }
+    }
+    if (s == null) {
         s = new ExploreStrategy(this);
         this.setStrategy(s);
     }
@@ -77,14 +86,24 @@ Procompsognathus.prototype.getNextAction = function() {
 };
 
 var Allosaurus = function(x, y) {
-    Creature.call(this, x, y);
-    this.hp = 1000;
+    Creature.call(this, x, y, 1000);
+    this.attacks = {
+        'bite': {strength:function(){ return 50; }},
+        'claw': {strength:function(){ return 5; }},
+    };
     this._last_prey = null;
 };
 Allosaurus.prototype = new Creature();
 Allosaurus.prototype.the = function() { return 'the allosaurus'; };
 Allosaurus.prototype.getAppearance = function() { return ['A', 'red']; };
 Allosaurus.prototype.getSpeed = function() { return 11; };
+Allosaurus.prototype.whenHitBy = function(attacker) {
+    if (this.hp > this.maxhp/2) {
+        this.setStrategy(new HuntBySightStrategy(attacker));
+    } else {
+        this.setStrategy(new FleeStrategy(attacker));
+    }
+};
 Allosaurus.prototype.getNextAction = function() {
     // Find a nearby and visible prey animal; chase it.
     if (this._strategy == null) {
@@ -112,13 +131,24 @@ Allosaurus.prototype.getNextAction = function() {
 
 
 var Velociraptor = function(x, y) {
-    Creature.call(this, x, y);
-    this.hp = 100;
+    Creature.call(this, x, y, 100);
+    this.attacks = {
+        'slash':{strength:function(){ return 30; }},
+        'bite':{strength:function(){ return 10; }},
+        'claw':{strength:function(){ return 10; }},
+    };
 };
 Velociraptor.prototype = new Creature();
 Velociraptor.prototype.the = function() { return 'the velociraptor'; };
 Velociraptor.prototype.getAppearance = function() { return ['v', '#252']; };
 Velociraptor.prototype.getSpeed = function() { return 11; };
+Velociraptor.prototype.whenHitBy = function(attacker) {
+    if (this.hp > this.maxhp/2) {
+        this.setStrategy(new HuntBySightStrategy(attacker));
+    } else {
+        this.setStrategy(new FleeStrategy(attacker));
+    }
+};
 Velociraptor.prototype.getNextAction = function() {
     // Find a nearby and visible prey animal; chase it.
     if (this._strategy == null) {

@@ -15,7 +15,7 @@ WalkOrFightAction.prototype.perform = function(actor) {
     var actors = Game.actorsAt(actor.coordPlus(this.delta));
     for (var i = 0; i < actors.length; ++i) {
         if (actors[i] instanceof Creature) {
-            return new FightAction(actors[i]);
+            return new FightAction(actors[i], Object.keys(actor.attacks).random());
         }
     }
     return new WalkAction(this.delta);
@@ -55,14 +55,35 @@ WalkAction.prototype.perform = function(actor) {
     return null;
 };
 
-var FightAction = function(defender) {
+var FightAction = function(defender, damageType) {
     this.defender = defender;
+    this.damageType = damageType;
+    console.log('new FightAction defender=%the damageType=%s'.format(defender, damageType));
 };
-FightAction.prototype.perform = function(actor) {
-    if (actor.currentlyVisibleToPlayer && this.defender.currentlyVisibleToPlayer) {
-        Game.alert("%The %s %the!".format(actor, verbs(actor, "hit"), this.defender));
+FightAction.prototype.perform = function(attacker) {
+    var defender = this.defender;
+    var attack = attacker.attacks[this.damageType];
+    assert(attack != null);
+    var shouldAnnounce = (attacker.currentlyVisibleToPlayer && defender.currentlyVisibleToPlayer);
+    var description = '%The %s %the!'.format(attacker, verbs(attacker, this.damageType), defender);
+    defender.hp = Math.max(0, defender.hp - attack.strength());
+    if (defender.hp == 0) {
+        description = '%The %s %the!'.format(attacker, verbs(attacker, 'kill'), defender);
+        if (defender != Game.player) {
+            // TODO: removing the player from the actors list is never correct; how should we handle this really?
+            Game.actors.splice(Game.actors.indexOf(defender), 1);
+        } else {
+            Game.alert(description);
+            description = '*** You have died ***';
+            Game.lose();
+        }
+        // TODO: corpses
+    } else {
+        defender.whenHitBy(attacker);
     }
-    actor.energy -= 100;
-    this.defender.getHit(5);
+    if (shouldAnnounce) {
+        Game.alert(description);
+    }
+    attacker.energy -= 100;
     return null;
 };

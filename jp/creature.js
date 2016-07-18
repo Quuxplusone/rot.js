@@ -1,9 +1,10 @@
-var Creature = function(x, y) {
+var Creature = function(x, y, maxhp) {
     Actor.call(this, x, y);
-    this.displayPriority = 50;
-    this.hp = 100;
+    this.maxhp = maxhp;
+    this.hp = maxhp;
 };
 Creature.prototype = new Actor();
+Creature.prototype.whenHitBy = function(attacker) {};
 Creature.prototype.canPass = function(coord) {
     if (Game.map.terrain(coord.x, coord.y).blocksWalking) {
         return false;
@@ -27,6 +28,4 @@ Creature.prototype.canSee = function(coord) {
         }
     });
     return result;
-};
-Creature.prototype.getHit = function(loss) {
 };

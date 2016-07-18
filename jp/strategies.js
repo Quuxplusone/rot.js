@@ -93,7 +93,7 @@ HuntBySightStrategy.prototype.getNextAction = function(actor) {
         return null;  // the hunt is over
     }
     if (actor.mooreDistanceTo(this._prey) == 1) {
-        return new FightAction(this._prey);
+        return new FightAction(this._prey, Object.keys(actor.attacks).random());
     }
     if (actor.canSee(this._prey)) {
         // Try to move in a straight line toward the prey.
@@ -130,7 +130,7 @@ HuntSmartlyStrategy.prototype.getNextAction = function(actor) {
         return null;  // the hunt is over
     }
     if (actor.mooreDistanceTo(this._prey) == 1) {
-        return new FightAction(this._prey);
+        return new FightAction(this._prey, Object.keys(actor.attacks).random());
     }
     if (actor.canSee(this._prey)) {
         // Try to move in a straight line toward the prey.
@@ -184,8 +184,9 @@ FleeStrategy.prototype.getNextAction = function(actor) {
     }
     // Otherwise, set a timer after which we'll switch tactics.
     this._boredom += 1;
-    if (this._boredom < 10) {
-        return new WaitAction();
+    if (this._boredom > 10) return null;  // we're bored, switch tactics
+    if (actor.mooreDistanceTo(this._predator) == 1) {
+        return new FightAction(this._predator, Object.keys(actor.attacks).random());
     }
-    return null; // we're bored; switch tactics
+    return new WaitAction();  // can't get away, but can't fight either
 };

@@ -22,6 +22,12 @@ Object.prototype.mooreDistanceTo = function(other) {
     return Math.max(Math.abs(this.x - other.x), Math.abs(this.y - other.y));
 };
 
+Object.prototype.euclideanDistanceTo = function(other) {
+    var dx = (this.x - other.x);
+    var dy = (this.y - other.y);
+    return Math.sqrt(dx*dx + dy*dy);
+};
+
 Object.prototype.deltaToward = function(other) {
     var dx = (other.x - this.x);
     var dy = (other.y - this.y);
