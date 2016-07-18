@@ -42,6 +42,11 @@ Map.prototype.generateDungeon = function() {
         for (var t2 = 0; t2 < num_trees; ++t2) {
             var tx = ROT.RNG.getNormalInt(x-5, x+5);
             var ty = ROT.RNG.getNormalInt(y-5, y+5);
+            this.setTerrain(tx,ty, new Terrain('bush'));
+        }
+        for (var t2 = 0; t2 < num_trees; ++t2) {
+            var tx = ROT.RNG.getNormalInt(x-5, x+5);
+            var ty = ROT.RNG.getNormalInt(y-5, y+5);
             this.setTerrain(tx,ty, new Terrain('tree'));
         }
     }
@@ -89,7 +94,13 @@ var Terrain = function(name) {
         case 'tall grass':
             this.appearance = [[';', ':'].random(), 'green'];
             this.movementCost = 1.5;
-            this.translucence = 1.5;
+            this.translucence = 0.8;
+            this.isNatural = true;
+            break;
+        case 'bush':
+            this.appearance = ['%', 'olive'];
+            this.movementCost = 2;
+            this.translucence = 0.5;
             this.isNatural = true;
             break;
         case 'tree':

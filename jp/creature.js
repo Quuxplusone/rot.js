@@ -16,18 +16,24 @@ Creature.prototype.costToPass = function(coord) {
     return Game.map.terrain(coord.x, coord.y).movementCost;
 };
 Creature.prototype.canPass = function(coord) { return this.costToPass(coord) != Infinity; };
-Creature.prototype.canSee = function(coord) {
-    // TODO: maybe rewrite this to match how the player sees things?
+Creature.prototype.canSee = function(defender) {
     var lightPasses = function(x,y) {
         return Game.map.valid(x,y) && (Game.map.terrain(x,y).translucence > 0);
     };
     var fov = new ROT.FOV.PreciseShadowcasting(lightPasses);
-    var maxVisRadius = this.mooreDistanceTo(coord)+1;
-    var result = false;
+    var maxVisRadius = this.mooreDistanceTo(defender)+1;
+    var vis = 0;
     fov.compute(this.x, this.y, maxVisRadius, function(x, y, r, value) {
-        if (x == coord.x && y == coord.y) {
-            result = (value > 0.8);
+        if (value !== 0) {
+            if (x == defender.x && y == defender.y) {
+                value *= Game.bresenhamTranslucence(this, {x:x,y:y}, function(x,y){ return Game.map.terrain(x,y).translucence; });
+                vis += value;
+            } else if (defender.manhattanDistanceTo({x:x,y:y}) == 1) {
+                value *= Game.bresenhamTranslucence(this, {x:x,y:y}, function(x,y){ return Game.map.terrain(x,y).translucence; });
+                vis += value/10;
+            }
         }
-    });
-    return result;
+    }.bind(this));
+    var visThreshold = 0.3 - 0.2*(this.hp / this.maxhp);
+    return vis * (1 - defender.stealth) > visThreshold;
 };

@@ -327,6 +327,76 @@ var Game = {
         return ROT.Color.toHex(ROT.Color.interpolate(ROT.Color.fromString(color || '#000'), [200,0,0], sigmoided));
     },
 
+    bresenhamTranslucence: function(fromCoord, toCoord, translucenceCallback) {
+        var dx = toCoord.x - fromCoord.x;
+        var dy = toCoord.y - fromCoord.y;
+        if (dx < 0) {
+            if (dy < 0) {
+                if (-dy < -dx) {
+                    assert(0 <= -dy && -dy <= -dx);
+                    return this.bresenhamTranslucence0(-dy, -dx, function(dy,dx) { return translucenceCallback(fromCoord.x-dx, fromCoord.y-dy); });
+                } else {
+                    assert(0 <= -dx && -dx <= -dy);
+                    return this.bresenhamTranslucence0(-dx, -dy, function(dx,dy) { return translucenceCallback(fromCoord.x-dx, fromCoord.y-dy); });
+                }
+            } else {
+                if (dy < -dx) {
+                    assert(0 <= dy && dy <= -dx);
+                    return this.bresenhamTranslucence0(dy, -dx, function(dy,dx) { return translucenceCallback(fromCoord.x-dx, fromCoord.y+dy); });
+                } else {
+                    assert(0 <= -dx && -dx <= dy);
+                    return this.bresenhamTranslucence0(-dx, dy, function(dx,dy) { return translucenceCallback(fromCoord.x-dx, fromCoord.y+dy); });
+                }
+            }
+        } else {
+            if (dy < 0) {
+                if (-dy < dx) {
+                    assert(0 <= -dy && -dy <= dx);
+                    return this.bresenhamTranslucence0(-dy, dx, function(dy,dx) { return translucenceCallback(fromCoord.x+dx, fromCoord.y-dy); });
+                } else {
+                    assert(0 <= dx && dx <= -dy);
+                    return this.bresenhamTranslucence0(dx, -dy, function(dx,dy) { return translucenceCallback(fromCoord.x+dx, fromCoord.y-dy); });
+                }
+            } else {
+                if (dy < dx) {
+                    assert(0 <= dy && dy <= dx);
+                    return this.bresenhamTranslucence0(dy, dx, function(dy,dx) { return translucenceCallback(fromCoord.x+dx, fromCoord.y+dy); });
+                } else {
+                    assert(0 <= dx && dx <= dy);
+                    return this.bresenhamTranslucence0(dx, dy, function(dx,dy) { return translucenceCallback(fromCoord.x+dx, fromCoord.y+dy); });
+                }
+            }
+        }
+    },
+    bresenhamTranslucence0: function(dx,dy, translucenceCallback) {
+        assert(dx >= 0);
+        assert(dy >= 0);
+        assert(dy >= dx);
+        var consecutive_clear_spaces = 0;
+        var result = 1.0;
+        var D = dx - dy;
+        var x = 0;
+        for (var y = 0; y < dy; ++y) {
+            var trans = translucenceCallback(x,y);
+            if (trans == 0.0) {
+                consecutive_clear_spaces = 0;
+            } else if (trans == 1.0) {
+                consecutive_clear_spaces += 1;
+            } else {
+                consecutive_clear_spaces = 0;
+                result *= trans;
+            }
+            if (D >= 0) {
+                ++x;
+                D -= dy;
+            }
+            D += dx;
+        }
+        // Consecutive clear spaces lead to improved visibility.
+        result += ((1.0 - result) * (consecutive_clear_spaces) / (consecutive_clear_spaces+3));
+        return result;
+    },
+
     redrawDisplay: function() {
         var display_width = this.display.getOptions().width;
         var display_height = this.display.getOptions().height;
@@ -347,13 +417,17 @@ var Game = {
         };
 
         var lightPasses = function(x,y) {
-            // TODO
             return inDisplay(x,y) && (Game.map.terrain(x,y).translucence > 0);
         };
         var fov = new ROT.FOV.PreciseShadowcasting(lightPasses);
         var maxVisRadius = Math.max(display_width, display_height);
         fov.compute(this.player.x, this.player.y, maxVisRadius, function(x, y, r, value) {
             if (!inDisplay(x,y)) return;
+            if (value !== 0) {
+                // Tiles behind trees never become *more* visible.
+                // Tiles behind tall grass can become *less* visible, though.
+                value *= Game.bresenhamTranslucence(Game.player, {x:x,y:y}, function(x,y){ return Game.map.terrain(x,y).translucence; });
+            }
             addVis(x,y, value);
             addVis(x+1,y, value/10);
             addVis(x-1,y, value/10);
@@ -383,22 +457,20 @@ var Game = {
                 var vis = getVis(x, y);
                 var [g, fg, bg] = [' ', '#777', '#000'];
                 if (vis >= visThreshold) {
-                    var actors = this.actorsAt({x:x,y:y});
-                    // TODO: actors can be hard to spot
-                    if (actors.length > 0) {
-                        function keycmp(a, b) {
-                            if (a.displayPriority < b.displayPriority) return 1;
-                            if (a.displayPriority > b.displayPriority) return -1;
-                            return 0;
-                        }
-                        actors.sort(keycmp);
-                        [g, fg, bg] = actors[0].getAppearance();
-                        actors[0].currentlyVisibleToPlayer = true;
-                        fg = this.interpolateVis(fg, vis);
+                    var actors = this.actors.filter(function(a) { return a.x==x && a.y==y; });
+                    var items = actors.filter(function(a) { return a instanceof Item; });
+                    var creatures = actors.filter(function(a) { return a instanceof Creature; });
+                    assert(items.length + creatures.length == actors.length);
+                    assert(creatures.length <= 1);
+                    if (creatures.length && (vis * (1 - creatures[0].stealth) >= visThreshold)) {
+                        creatures[0].currentlyVisibleToPlayer = true;
+                        [g, fg, bg] = creatures[0].getAppearance();
+                    } else if (items.length > 0) {
+                        [g, fg, bg] = items[0].getAppearance();
                     } else {
                         [g, fg, bg] = this.map.terrain(x, y).appearance;
-                        fg = this.interpolateVis(fg, vis);
                     }
+                    fg = this.interpolateVis(fg, vis);
                 }
                 fg = this.interpolateBloodshot(fg, bloodshotRadius, Game.player.euclideanDistanceTo({x:x,y:y})-5);
                 bg = this.interpolateBloodshot(bg, bloodshotRadius, Game.player.euclideanDistanceTo({x:x,y:y}));

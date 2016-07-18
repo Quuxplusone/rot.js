@@ -1,5 +1,6 @@
 var Human = function(x, y) {
     Creature.call(this, x, y, 100);
+    this.stealth = 0;
     this.attacks = {
         'hit': {strength:function(){ return 2; }},
     };
@@ -7,7 +8,7 @@ var Human = function(x, y) {
 Human.prototype = new Creature();
 Human.prototype.the = function() { return "the park ranger"; };
 Human.prototype.getAppearance = function() { return ['@', '#ddd', '#000']; };
-Human.prototype.getSpeed = function() { return 20; };
+Human.prototype.getSpeed = function() { return 10; };
 Human.prototype.getNextAction = function() {
     var delta = randomDelta();
     if (this.canPass(this.coordPlus(delta))) {
@@ -27,6 +28,7 @@ Human.prototype.getNextAction = function() {
 
 var Procompsognathus = function(x, y) {
     Creature.call(this, x, y, 10);
+    this.stealth = 0.1;
     this.attacks = {
         'bite': {strength:function(){ return 5; }},
         'pinch': {strength:function(){ return 1; }},
@@ -87,6 +89,7 @@ Procompsognathus.prototype.getNextAction = function() {
 
 var Allosaurus = function(x, y) {
     Creature.call(this, x, y, 1000);
+    this.stealth = 0;
     this.attacks = {
         'bite': {strength:function(){ return 50; }},
         'claw': {strength:function(){ return 5; }},
@@ -132,6 +135,7 @@ Allosaurus.prototype.getNextAction = function() {
 
 var Velociraptor = function(x, y) {
     Creature.call(this, x, y, 100);
+    this.stealth = 0.3;
     this.attacks = {
         'slash':{strength:function(){ return 30; }},
         'bite':{strength:function(){ return 10; }},
