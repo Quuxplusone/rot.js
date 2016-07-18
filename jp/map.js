@@ -13,28 +13,25 @@ Map.prototype.terrain = function(x,y) {
         return this._invalidTerrain;
     }
 };
-Map.prototype.getAllPassableCoordinates = function() {
-    var result = [];
-    for (var x = 0; x < this.width; ++x) {
-        for (var y = 0; y < this.height; ++y) {
-            if (!this.terrain(x, y).blocksWalking) {
-                result.push(x + ',' + y);
-            }
-        }
+Map.prototype.setTerrain = function(x,y, tile) {
+    if (this.valid(x,y)) {
+        this._terrain[x][y] = tile;
     }
-    return result;
 };
 Map.prototype.generateDungeon = function() {
     this._terrain = createGrid(this.width, this.height, function(){ return new Terrain('grass'); });
-    var fx = ROT.RNG.getUniformInt(0, 10);
-    var fy = ROT.RNG.getUniformInt(0, 10);
-    for (var x = 0; x < this.width; ++x) {
-        for (var y = 0; y < this.height; ++y) {
-            if ((x % 40 == fx || y % 30 == fy)) {
-                if (ROT.RNG.getPercentage() <= 95) {
-                    this._terrain[x][y] = new Terrain('fence');
-                }
-            }
+    // Make some random tall grass.
+    for (var t1 = 0; t1 < 10; ++t1) {
+        var x = ROT.RNG.getUniformInt(0, this.width-1);
+        var y = ROT.RNG.getUniformInt(0, this.height-1);
+        for (var t2 = 0; t2 < 10; ++t2) {
+            var tx = ROT.RNG.getNormalInt(x-5, x+5);
+            var ty = ROT.RNG.getNormalInt(y-5, y+5);
+            this.setTerrain(tx,ty, new Terrain('tall grass'));
+            this.setTerrain(tx+1,ty, new Terrain('tall grass'));
+            this.setTerrain(tx-1,ty, new Terrain('tall grass'));
+            this.setTerrain(tx,ty+1, new Terrain('tall grass'));
+            this.setTerrain(tx,ty-1, new Terrain('tall grass'));
         }
     }
     // Make some random trees.
@@ -45,8 +42,18 @@ Map.prototype.generateDungeon = function() {
         for (var t2 = 0; t2 < num_trees; ++t2) {
             var tx = ROT.RNG.getNormalInt(x-5, x+5);
             var ty = ROT.RNG.getNormalInt(y-5, y+5);
-            if (this.valid(tx,ty)) {
-                this._terrain[tx][ty] = new Terrain('tree');
+            this.setTerrain(tx,ty, new Terrain('tree'));
+        }
+    }
+    // Make fences with holes in them.
+    var fx = ROT.RNG.getUniformInt(0, 10);
+    var fy = ROT.RNG.getUniformInt(0, 10);
+    for (var x = 0; x < this.width; ++x) {
+        for (var y = 0; y < this.height; ++y) {
+            if ((x % 40 == fx || y % 30 == fy)) {
+                if (ROT.RNG.getPercentage() <= 95) {
+                    this.setTerrain(x,y, new Terrain('fence'));
+                }
             }
         }
     }
@@ -57,33 +64,39 @@ var Terrain = function(name) {
     switch (this.name) {
         case 'aether':
             this.appearance = ['X', '#fff'];
-            this.blocksWalking = true;
-            this.blocksSight = true;
+            this.movementCost = Infinity;
+            this.translucence = 0;
+            this.isNatural = false;
             break;
         case 'wall':
             this.appearance = ['#', '#777'];
-            this.blocksWalking = true;
-            this.blocksSight = true;
+            this.movementCost = Infinity;
+            this.translucence = 0;
+            this.isNatural = false;
             break;
         case 'fence':
             this.appearance = ['+', '#f11'];
-            this.blocksWalking = true;
-            this.blocksSight = false;
+            this.movementCost = Infinity;
+            this.translucence = 1;
+            this.isNatural = false;
             break;
         case 'grass':
             this.appearance = [[',', '.'].random(), 'green'];
-            this.blocksWalking = false;
-            this.blocksSight = false;
+            this.movementCost = 1;
+            this.translucence = 1;
+            this.isNatural = true;
             break;
         case 'tall grass':
             this.appearance = [[';', ':'].random(), 'green'];
-            this.blocksWalking = false;
-            this.blocksSight = false;
+            this.movementCost = 1.5;
+            this.translucence = 1.5;
+            this.isNatural = true;
             break;
         case 'tree':
             this.appearance = ['o', 'brown'];
-            this.blocksWalking = true;
-            this.blocksSight = true;
+            this.movementCost = Infinity;
+            this.translucence = 0;
+            this.isNatural = true;
             break;
         default:
             assert(false, 'bad Terrain name');

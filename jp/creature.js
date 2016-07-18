@@ -5,19 +5,21 @@ var Creature = function(x, y, maxhp) {
 };
 Creature.prototype = new Actor();
 Creature.prototype.whenHitBy = function(attacker) {};
-Creature.prototype.canPass = function(coord) {
-    if (Game.map.terrain(coord.x, coord.y).blocksWalking) {
-        return false;
+Creature.prototype.costToPass = function(coord) {
+    if (Game.map.terrain(coord.x, coord.y).movementCost == Infinity) {
+        return Infinity;
     }
     var actors = Game.actors.filter(function(a) { return a != this && a instanceof Creature && a.coordEquals(coord); });
     if (actors.length) {
-        return false;
+        return Infinity;
     }
-    return true;
+    return Game.map.terrain(coord.x, coord.y).movementCost;
 };
+Creature.prototype.canPass = function(coord) { return this.costToPass(coord) != Infinity; };
 Creature.prototype.canSee = function(coord) {
+    // TODO: maybe rewrite this to match how the player sees things?
     var lightPasses = function(x,y) {
-        return Game.map.valid(x,y) && !Game.map.terrain(x,y).blocksSight;
+        return Game.map.valid(x,y) && (Game.map.terrain(x,y).translucence > 0);
     };
     var fov = new ROT.FOV.PreciseShadowcasting(lightPasses);
     var maxVisRadius = this.mooreDistanceTo(coord)+1;

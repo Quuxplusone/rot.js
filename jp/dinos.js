@@ -169,12 +169,21 @@ Velociraptor.prototype.getNextAction = function() {
                 pack[i].setStrategy(new HuntSmartlyStrategy(prey));
             }
         } else {
-            // Find the nearest cover and head for it.
+            // Find the nearest natural spot with a low average translucence and head for it.
+            var fitnessOfTile = function(x,y) {
+                var tile = Game.map.terrain(x,y);
+                return (tile.isNatural ? 10 : 0) + 10*(1 - tile.translucence);
+            };
+            var fitnessOfSpot = function(x,y) {
+                return fitnessOfTile(x,y) + fitnessOfTile(x+1,y) + fitnessOfTile(x-1,y) + fitnessOfTile(x,y+1) + fitnessOfTile(x,y-1);
+            };
+            var currentCover = fitnessOfSpot(this.x, this.y);
             var bestCover = null;
             var bestDist = Infinity;
             for (var x = this.x - 30; x < this.x + 30; ++x) {
                 for (var y = this.y - 30; y < this.y + 30; ++y) {
-                    if (Game.map.terrain(x,y).blocksSight) {
+                    if (Game.map.terrain(x,y).movementCost == Infinity) continue;
+                    if (fitnessOfSpot(x,y) > currentCover) {
                         var dist = this.mooreDistanceTo({x:x,y:y});
                         if (dist < bestDist) {
                             bestCover = {x:x,y:y};

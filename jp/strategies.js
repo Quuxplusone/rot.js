@@ -58,8 +58,7 @@ var ExploreStrategy = function(actor, target) {
     }
     this._target = {x: target.x, y: target.y};
     this._path = aStarDistanceAndPath(actor, this._target, 20, function(coord) {
-        if (!actor.canPass(coord)) return Infinity;
-        return 1;
+        return actor.costToPass(coord);
     })[1];
 };
 ExploreStrategy.prototype.getNextAction = function(actor) {
@@ -76,15 +75,14 @@ ExploreStrategy.prototype.getNextAction = function(actor) {
     }
     // Otherwise, step around obstacles if possible.
     this.path = aStarDistanceAndPath(actor, this._target, 20, function(coord) {
-        if (!actor.canPass(coord)) return Infinity;
-        return 1;
+        return actor.costToPass(coord);
     })[1];
     return this.getNextAction(actor);
 };
 
 var HuntBySightStrategy = function(prey) {
     this._prey = prey;
-    this._preycoord = null;
+    this._preycoord = {x:prey.x, y:prey.y};
     this._boredom = 0;
 };
 HuntBySightStrategy.prototype.getNextAction = function(actor) {
@@ -121,7 +119,7 @@ HuntBySightStrategy.prototype.getNextAction = function(actor) {
 
 var HuntSmartlyStrategy = function(prey) {
     this._prey = prey;
-    this._preycoord = null;
+    this._preycoord = {x:prey.x, y:prey.y};
     this._boredom = 0;
 };
 HuntSmartlyStrategy.prototype.getNextAction = function(actor) {
@@ -158,7 +156,7 @@ HuntSmartlyStrategy.prototype.getNextAction = function(actor) {
 
 var FleeStrategy = function(predator) {
     this._predator = predator;
-    this._predatorcoord = null;
+    this._predatorcoord = {x:predator.x, y:predator.y};
     this._boredom = 0;
 };
 FleeStrategy.prototype.getNextAction = function(actor) {

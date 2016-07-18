@@ -30,9 +30,8 @@ WalkAction.prototype.perform = function(actor) {
     var newCoord = actor.coordPlus(this.delta);
     assert(actor.mooreDistanceTo(newCoord) == 1);
     var tile = Game.map.terrain(newCoord.x, newCoord.y);
-    if (tile.blocksWalking) {
+    if (tile.movementCost == Infinity) {
         if (actor.currentlyVisibleToPlayer) {
-            console.log('bump!');
             Game.alert("%The %s into %the.".format(actor, verbs(actor, "bump"), tile));
         }
         actor.setStrategy(null);
@@ -50,7 +49,7 @@ WalkAction.prototype.perform = function(actor) {
         // Looks like the move is valid.
         actor.x = newCoord.x;
         actor.y = newCoord.y;
-        actor.energy -= 100;
+        actor.energy -= 100 * tile.movementCost;
     }
     return null;
 };

@@ -347,7 +347,8 @@ var Game = {
         };
 
         var lightPasses = function(x,y) {
-            return inDisplay(x,y) && !Game.map.terrain(x,y).blocksSight;
+            // TODO
+            return inDisplay(x,y) && (Game.map.terrain(x,y).translucence > 0);
         };
         var fov = new ROT.FOV.PreciseShadowcasting(lightPasses);
         var maxVisRadius = Math.max(display_width, display_height);
