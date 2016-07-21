@@ -45,6 +45,7 @@ var Game = {
         this.prompt = document.querySelector("#prompt");
         this.adventure_input = document.querySelector("#adventure_input");
         this.level.appendChild(this.display.getContainer());
+        this.level.focus();
 
         this.level.addEventListener("keydown", function(e) {
             Game.parseRoguelikeInput(e.keyCode);
@@ -255,7 +256,7 @@ var Game = {
 
     _generateMap: function() {
         this.actors = [];
-        this.map = new Map(100, 100);
+        this.map = new Map(100+160, 100+50);
         console.log('Generating the map...');
         this.map.generateDungeon();
     },
@@ -277,8 +278,12 @@ var Game = {
 
         console.log('Placing compys...');
         for (var i = 0; i < 2; ++i) {
-            var x = ROT.RNG.getUniformInt(0, this.map.width-1);
-            var y = ROT.RNG.getUniformInt(0, this.map.height-1);
+            do {
+                var x = ROT.RNG.getUniformInt(0, this.map.width-1);
+                var y = ROT.RNG.getUniformInt(0, this.map.height-1);
+                var dino = new Procompsognathus(x,y);
+            } while (!dino.canPass(dino));
+            this.actors.push(dino);
             var num_dinos = ROT.RNG.getNormalInt(3,10);
             for (var t2 = 0; t2 < num_dinos; ++t2) {
                 var tx = ROT.RNG.getNormalInt(x-5, x+5);
@@ -292,12 +297,12 @@ var Game = {
 
         console.log('Placing allosaurs...');
         for (var i = 0; i < 2; ++i) {
-            var x = ROT.RNG.getUniformInt(0, this.map.width-1);
-            var y = ROT.RNG.getUniformInt(0, this.map.height-1);
-            var dino = new Allosaurus(x,y);
-            if (dino.canPass(dino)) {
-                this.actors.push(dino);
-            }
+            do {
+                var x = ROT.RNG.getUniformInt(0, this.map.width-1);
+                var y = ROT.RNG.getUniformInt(0, this.map.height-1);
+                var dino = new Allosaurus(x,y);
+            } while (!dino.canPass(dino));
+            this.actors.push(dino);
         }
 
         console.log('Placing velociraptors...');
@@ -317,13 +322,13 @@ var Game = {
     },
 
     interpolateVis: function(fg, vis) {
-        return ROT.Color.toHex(ROT.Color.interpolate([64,64,64], ROT.Color.fromString(fg || '#777'), vis));
+        return ROT.Color.toRGB(ROT.Color.interpolate([64,64,64], ROT.Color.fromString(fg || '#777'), vis));
     },
 
     interpolateBloodshot: function(color, bloodshotRadius, actualRadius) {
         var normalized = (actualRadius - bloodshotRadius) * 0.4;
         var sigmoided = 1 / (1 + Math.exp(-normalized));
-        return ROT.Color.toHex(ROT.Color.interpolate(ROT.Color.fromString(color || '#000'), [200,0,0], sigmoided));
+        return ROT.Color.toRGB(ROT.Color.interpolate(ROT.Color.fromString(color || '#000'), [200,0,0], sigmoided));
     },
 
     bresenhamTranslucence: function(fromCoord, toCoord, translucenceCallback) {
@@ -407,6 +412,7 @@ var Game = {
         var inDisplay = function(x,y) { return (dx <= x && x < dx+display_width) && (dy <= y && y < dy+display_height); };
 
         var _visibility = createGrid(display_width, display_height, function(){ return 0; });
+        var _fullvisibility = createGrid(display_width, display_height, function(){ return 0; });
         var getVis = function(x,y) { return _visibility[x-dx][y-dy]; };
         var setVis = function(x,y,v) { if (inDisplay(x,y)) _visibility[x-dx][y-dy] = v; };
         var addVis = function(x,y,v) {
@@ -418,11 +424,19 @@ var Game = {
         var lightPasses = function(x,y) {
             return inDisplay(x,y) && (Game.map.terrain(x,y).translucence > 0);
         };
+        var lightPassesCompletely = function(x,y) {
+            return inDisplay(x,y) && (Game.map.terrain(x,y).translucence == 1);
+        };
         var fov = new ROT.FOV.PreciseShadowcasting(lightPasses);
+        var fov1 = new ROT.FOV.PreciseShadowcasting(lightPassesCompletely);
         var maxVisRadius = Math.max(display_width, display_height);
+        fov1.compute(this.player.x, this.player.y, maxVisRadius, function(x, y, r, value) {
+            if (!inDisplay(x,y)) return;
+            _fullvisibility[x-dx][y-dy] = (value >= 0.5);
+        });
         fov.compute(this.player.x, this.player.y, maxVisRadius, function(x, y, r, value) {
             if (!inDisplay(x,y)) return;
-            if (value !== 0) {
+            if (value !== 0 && !_fullvisibility[x-dx][y-dy]) {
                 // Tiles behind trees never become *more* visible.
                 // Tiles behind tall grass can become *less* visible, though.
                 value *= Game.bresenhamTranslucence(Game.player, {x:x,y:y}, function(x,y){ return Game.map.terrain(x,y).translucence; });
