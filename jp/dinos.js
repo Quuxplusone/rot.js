@@ -34,12 +34,27 @@ var Procompsognathus = function(x, y) {
         'pinch': {strength:function(){ return 1; }},
     };
     this._speed = ROT.RNG.getUniformInt(7,11);
+    this._predatorList = [];
 };
 Procompsognathus.prototype = new Creature();
 Procompsognathus.prototype.the = function() { return 'the procompsognathus'; };
 Procompsognathus.prototype.getAppearance = function() { return ['c', 'lightgreen']; };
 Procompsognathus.prototype.getSpeed = function() { return this._speed; };
+Procompsognathus.prototype._publicizePredator = function(attacker) {
+    var proto = Object.getPrototypeOf(attacker);
+    var flock = Game.actors.filter(function(actor) {
+        return actor instanceof Procompsognathus && this.mooreDistanceTo(actor) <= 8 && actor.canSee(attacker);
+    }.bind(this));
+    for (var i=0; i < flock.length; ++i) {
+        var list = flock[i]._predatorList;
+        if (list.indexOf(proto) < 0) {
+            console.log('publicized!', this, flock[i], proto);
+            list.push(proto);
+        }
+    }
+};
 Procompsognathus.prototype.whenHitBy = function(attacker) {
+    this._publicizePredator(attacker);
     this.setStrategy(new FleeStrategy(attacker));
 };
 Procompsognathus.prototype.getNextAction = function() {
@@ -65,8 +80,9 @@ Procompsognathus.prototype.getNextAction = function() {
         }
     }
     if (s == null) {
-        var dangers = Game.actors.filter(function (predator) {
-            return predator instanceof Allosaurus && this.mooreDistanceTo(predator) <= 5 && this.canSee(predator);
+        var dangers = Game.actors.filter(function (a) {
+            var proto = Object.getPrototypeOf(a);
+            return this._predatorList.indexOf(proto) >= 0 && this.mooreDistanceTo(a) <= 5 && this.canSee(a);
         }.bind(this));
         if (dangers.length) {
             s = new FleeStrategy(dangers[0]);

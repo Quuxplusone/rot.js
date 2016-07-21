@@ -18,8 +18,46 @@ Map.prototype.setTerrain = function(x,y, tile) {
         this._terrain[x][y] = tile;
     }
 };
+Map.prototype.setTerrainIfLand = function(x,y, tile) {
+    if (this.valid(x,y) && this.terrain(x,y).name !== 'water') {
+        this._terrain[x][y] = tile;
+    }
+};
+Map.prototype.makeBlob = function(cx, cy, width, height, f) {
+    for (var x = Math.round(cx - width/2); x < cx - width/2 + width; ++x) {
+        for (var y = Math.round(cy - height/2); y < cy - height/2 + height; ++y) {
+            if ({x:x,y:y*width/height}.euclideanDistanceTo({x:cx,y:cy*width/height}) < width/2) {
+                this.setTerrain(x, y, f());
+            }
+        }
+    }
+    if (width >= 3 && height >= 3) {
+        var a = ROT.RNG.getUniform() * 2 * Math.PI;
+        this.makeBlob(cx + width/2*Math.cos(a), cy + height/2*Math.sin(a), width/3, height/3, f);
+        a = ROT.RNG.getUniform() * 2 * Math.PI;
+        this.makeBlob(cx + width/2*Math.cos(a), cy + height/2*Math.sin(a), width/3, height/3, f);
+    }
+};
 Map.prototype.generateDungeon = function() {
-    this._terrain = createGrid(this.width, this.height, function(){ return new Terrain('grass'); });
+    this._terrain = createGrid(this.width, this.height, function(){ return new Terrain('water'); });
+    this.makeBlob(this.width/2, this.height/2, this.width-10, this.height-10, function(){ return new Terrain('grass'); });
+    // Make pools of water with accompanying tall grass and bushes.
+    for (var t1 = 0; t1 < 3; ++t1) {
+        var x = ROT.RNG.getUniformInt(0, this.width-1);
+        var y = ROT.RNG.getUniformInt(0, this.height-1);
+        this.makeBlob(x, y, 5, 4, function(){ return new Terrain('water'); });
+        x += ROT.RNG.getUniformInt(-3, 3);
+        y += ROT.RNG.getUniformInt(-2, 2);
+        for (var t2 = 0; t2 < 4; ++t2) {
+            var tx = ROT.RNG.getNormalInt(x-3, x+3);
+            var ty = ROT.RNG.getNormalInt(y-3, y+3);
+            this.setTerrainIfLand(tx,ty, new Terrain('bush'));
+            this.setTerrainIfLand(tx+1,ty, new Terrain('tall grass'));
+            this.setTerrainIfLand(tx-1,ty, new Terrain('tall grass'));
+            this.setTerrainIfLand(tx,ty+1, new Terrain('tall grass'));
+            this.setTerrainIfLand(tx,ty-1, new Terrain('tall grass'));
+        }
+    }
     // Make some random tall grass.
     for (var t1 = 0; t1 < 10; ++t1) {
         var x = ROT.RNG.getUniformInt(0, this.width-1);
@@ -27,11 +65,11 @@ Map.prototype.generateDungeon = function() {
         for (var t2 = 0; t2 < 10; ++t2) {
             var tx = ROT.RNG.getNormalInt(x-5, x+5);
             var ty = ROT.RNG.getNormalInt(y-5, y+5);
-            this.setTerrain(tx,ty, new Terrain('tall grass'));
-            this.setTerrain(tx+1,ty, new Terrain('tall grass'));
-            this.setTerrain(tx-1,ty, new Terrain('tall grass'));
-            this.setTerrain(tx,ty+1, new Terrain('tall grass'));
-            this.setTerrain(tx,ty-1, new Terrain('tall grass'));
+            this.setTerrainIfLand(tx,ty, new Terrain('tall grass'));
+            this.setTerrainIfLand(tx+1,ty, new Terrain('tall grass'));
+            this.setTerrainIfLand(tx-1,ty, new Terrain('tall grass'));
+            this.setTerrainIfLand(tx,ty+1, new Terrain('tall grass'));
+            this.setTerrainIfLand(tx,ty-1, new Terrain('tall grass'));
         }
     }
     // Make some random trees.
@@ -42,12 +80,12 @@ Map.prototype.generateDungeon = function() {
         for (var t2 = 0; t2 < num_trees; ++t2) {
             var tx = ROT.RNG.getNormalInt(x-5, x+5);
             var ty = ROT.RNG.getNormalInt(y-5, y+5);
-            this.setTerrain(tx,ty, new Terrain('bush'));
+            this.setTerrainIfLand(tx,ty, new Terrain('bush'));
         }
         for (var t2 = 0; t2 < num_trees; ++t2) {
             var tx = ROT.RNG.getNormalInt(x-5, x+5);
             var ty = ROT.RNG.getNormalInt(y-5, y+5);
-            this.setTerrain(tx,ty, new Terrain('tree'));
+            this.setTerrainIfLand(tx,ty, new Terrain('tree'));
         }
     }
     // Make fences with holes in them.
@@ -57,7 +95,7 @@ Map.prototype.generateDungeon = function() {
         for (var y = 0; y < this.height; ++y) {
             if ((x % 40 == fx || y % 30 == fy)) {
                 if (ROT.RNG.getPercentage() <= 95) {
-                    this.setTerrain(x,y, new Terrain('fence'));
+                    this.setTerrainIfLand(x,y, new Terrain('fence'));
                 }
             }
         }
@@ -107,6 +145,12 @@ var Terrain = function(name) {
             this.appearance = ['o', 'brown'];
             this.movementCost = Infinity;
             this.translucence = 0;
+            this.isNatural = true;
+            break;
+        case 'water':
+            this.appearance = [['~', '≈'].random(), 'steelblue'];
+            this.movementCost = Infinity;
+            this.translucence = 1;
             this.isNatural = true;
             break;
         default:

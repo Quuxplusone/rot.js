@@ -266,7 +266,6 @@ var Game = {
         for (var i=0; i < 1000; ++i) {
             var x = ROT.RNG.getUniformInt(0, this.map.width-1);
             var y = ROT.RNG.getUniformInt(0, this.map.height-1);
-            console.log(x,y);
             var dino = new Human(x,y);
             if (dino.canPass({x:x,y:y})) {
                 this.actors.push(dino);
