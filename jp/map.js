@@ -19,7 +19,7 @@ Map.prototype.setTerrain = function(x,y, tile) {
     }
 };
 Map.prototype.setTerrainIfLand = function(x,y, tile) {
-    if (this.valid(x,y) && this.terrain(x,y).name !== 'water') {
+    if (this.valid(x,y) && this.terrain(x,y).name !== 'seawater') {
         this._terrain[x][y] = tile;
     }
 };
@@ -54,8 +54,7 @@ Map.prototype.makeBlob = function(cx, cy, width, height, name) {
     return did_something;
 };
 Map.prototype.generateDungeon = function() {
-    var water = new Terrain('water');
-    this._terrain = createGrid(this.width, this.height, function(){ return water; });
+    this._terrain = createGrid(this.width, this.height, function(){ return new Terrain('seawater'); });
     this.makeBlob(this.width/2, this.height/2, this.width-160, this.height-50, 'grass');
     // Make pools of water with accompanying tall grass and bushes.
     for (var t1 = 0; t1 < 3; ++t1) {
@@ -108,8 +107,8 @@ Map.prototype.generateDungeon = function() {
     // Make a boat dock on the east shore.
     var y = ROT.RNG.getUniformInt(Math.round(this.height*0.4), Math.round(this.height*0.6));
     var x = this.width/2;
-    assert(this.terrain(x,y).name != 'water');
-    while (this.terrain(x,y).name != 'water') {
+    assert(this.terrain(x,y).name != 'seawater');
+    while (this.terrain(x,y).name != 'seawater') {
         ++x;
     }
     this.setTerrain(x-1,y-1, new Terrain('floor'));
@@ -133,17 +132,17 @@ Map.prototype.generateDungeon = function() {
     var y = this.height/2;
     var w = ROT.RNG.getUniformInt(5, 10);
     var h = ROT.RNG.getUniformInt(4, 7);
-    this.makeRectangle(x, y, w, h, 'low wall');
+    this.makeRectangle(x, y, w, h, 'wall');
     x += w;
+    w = ROT.RNG.getUniformInt(5, 10);
+    h = ROT.RNG.getUniformInt(4, 7);
     y -= h/2;
-    w = ROT.RNG.getUniformInt(5, 10);
-    h = ROT.RNG.getUniformInt(4, 7);
-    this.makeRectangle(x, y, w, h, 'low wall');
+    this.makeRectangle(x, y, w, h, 'wall');
     x += ROT.RNG.getUniformInt(Math.round(-w/2), Math.round(w/2));
-    y -= h;
     w = ROT.RNG.getUniformInt(5, 10);
     h = ROT.RNG.getUniformInt(4, 7);
-    this.makeRectangle(x, y, w, h, 'low wall');
+    y -= h;
+    this.makeRectangle(x, y, w, h, 'wall');
 
 
     // Make fences with holes in them.
@@ -162,36 +161,36 @@ Map.prototype.generateDungeon = function() {
 
 var Terrain = function(name) {
     this.name = name;
+    this.isMemorized = false;
+    this.isMemorable = false;
+    this.isNatural = false;
     switch (this.name) {
         case 'aether':
             this.appearance = ['X', '#fff'];
             this.movementCost = Infinity;
             this.translucence = 0;
-            this.isNatural = false;
             break;
         case 'wall':
             this.appearance = ['#', '#777'];
             this.movementCost = Infinity;
             this.translucence = 0;
-            this.isNatural = false;
+            this.isMemorable = true;
             break;
         case 'low wall':
             this.appearance = ['#', '#777'];
             this.movementCost = Infinity;
             this.translucence = 0.5;
-            this.isNatural = false;
+            this.isMemorable = true;
             break;
         case 'floor':
             this.appearance = ['.', '#777'];
             this.movementCost = 1;
             this.translucence = 1;
-            this.isNatural = false;
             break;
         case 'fence':
             this.appearance = ['+', '#f11'];
             this.movementCost = Infinity;
             this.translucence = 1;
-            this.isNatural = false;
             break;
         case 'grass':
             this.appearance = [[',', '.'].random(), 'green'];
@@ -218,9 +217,15 @@ var Terrain = function(name) {
             this.isNatural = true;
             break;
         case 'water':
-            this.appearance = [['~', '≈'].random(), 'steelblue'];
+            this.appearance = ['~', 'steelblue'];
             this.movementCost = Infinity;
             this.translucence = 1;
+            this.isNatural = true;
+            break;
+        case 'seawater':
+            this.appearance = [['\u223C', '≈'].random(), 'steelblue'];
+            this.movementCost = Infinity;
+            this.translucence = 0.95;
             this.isNatural = true;
             break;
         default:
@@ -230,3 +235,20 @@ var Terrain = function(name) {
 Terrain.prototype.the = function() {
     return 'the ' + this.name;
 };
+Terrain.seawaterGlyphForCoordinates = function(x,y, time) {
+    var p = Terrain.animateWater_perlin;
+    return ['\u223C', '≈'][Math.sin(p.noise(x/10,y/10,time/10000)) > 0 ? 0 : 1];
+}
+Terrain.animateWater = function() {
+    var now = Date.now();
+    var dx = Terrain.animateWater_dx;
+    var dy = Terrain.animateWater_dy;
+    for (var key in Game.display._data) {
+        var data = Game.display._data[key];
+        if (data[2] == '\u223C' || data[2] == '≈') {
+            data[2] = Terrain.seawaterGlyphForCoordinates(data[0] + dx, data[1] + dy, now);
+            Game.display._dirty = true;
+        }
+    }
+};
+Terrain.animateWater_perlin = new ClassicalNoise();

@@ -32,7 +32,7 @@ WalkAction.prototype.perform = function(actor) {
     var tile = Game.map.terrain(newCoord.x, newCoord.y);
     if (tile.movementCost == Infinity) {
         if (actor.currentlyVisibleToPlayer) {
-            if (tile.name == 'water') {
+            if (tile.name == 'water' || tile.name == 'seawater') {
                 Game.alert("%The can't cross %the.".format(actor, tile));
             } else {
                 Game.alert("%The %s into %the.".format(actor, verbs(actor, "bump"), tile));

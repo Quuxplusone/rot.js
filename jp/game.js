@@ -106,6 +106,7 @@ var Game = {
             console.log(e);
         }
         this._populateMap();
+        this._waterAnimation = window.setInterval(Terrain.animateWater, 60);
         this.alert("Welcome.");
         this.currentActor = 0;
         this.runGameLoopUntilBlocked();
@@ -139,11 +140,13 @@ var Game = {
     },
 
     win: function() {
-        Game.is_over = true;
+        this.is_over = true;
+        window.clearInterval(this._waterAnimation);
     },
 
     lose: function() {
-        Game.is_over = true;
+        this.is_over = true;
+        window.clearInterval(this._waterAnimation);
     },
 
     alert: function(message, options) {
@@ -230,7 +233,6 @@ var Game = {
         if (text.startsWith('sethp ')) {
             Game.player.hp = +(text.substring(6));
             Game.alert('You have %s hit points remaining (out of %s).'.format(Game.player.hp, Game.player.maxhp));
-            //Game.redrawDisplay();
             return;
         }
         switch (text) {
@@ -442,10 +444,12 @@ var Game = {
                 value *= Game.bresenhamTranslucence(Game.player, {x:x,y:y}, function(x,y){ return Game.map.terrain(x,y).translucence; });
             }
             addVis(x,y, value);
-            addVis(x+1,y, value/10);
-            addVis(x-1,y, value/10);
-            addVis(x,y+1, value/10);
-            addVis(x,y-1, value/10);
+            if (Game.map.terrain(x,y).isNatural) {
+                addVis(x+1,y, value/10);
+                addVis(x-1,y, value/10);
+                addVis(x,y+1, value/10);
+                addVis(x,y-1, value/10);
+            }
         });
         setVis(Game.player.x, Game.player.y, 1.0);
 
@@ -465,10 +469,17 @@ var Game = {
             bloodshotRadius = Infinity;
         }
 
+        var now = Date.now();
+        Terrain.animateWater_dx = dx;
+        Terrain.animateWater_dy = dy;
         for (var x = dx; x < dx + display_width; ++x) {
             for (var y = dy; y < dy + display_height; ++y) {
                 var vis = getVis(x, y);
                 var [g, fg, bg] = [' ', '#777', '#000'];
+                if (vis < visThreshold && this.map.terrain(x,y).isMemorized) {
+                    // Remember man-made obstacles.
+                    vis = visThreshold;
+                }
                 if (vis >= visThreshold) {
                     var actors = this.actors.filter(function(a) { return a.x==x && a.y==y; });
                     var items = actors.filter(function(a) { return a instanceof Item; });
@@ -482,6 +493,10 @@ var Game = {
                         [g, fg, bg] = items[0].getAppearance();
                     } else {
                         [g, fg, bg] = this.map.terrain(x, y).appearance;
+                        if (this.map.terrain(x,y).name == 'seawater') {
+                            g = Terrain.seawaterGlyphForCoordinates(x, y, now);
+                        }
+                        this.map.terrain(x,y).isMemorized = this.map.terrain(x,y).isMemorable;
                     }
                     fg = this.interpolateVis(fg, vis);
                 }

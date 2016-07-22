@@ -28,7 +28,7 @@ Creature.prototype.canSee = function(defender) {
             if (x == defender.x && y == defender.y) {
                 value *= Game.bresenhamTranslucence(this, {x:x,y:y}, function(x,y){ return Game.map.terrain(x,y).translucence; });
                 vis += value;
-            } else if (defender.manhattanDistanceTo({x:x,y:y}) == 1) {
+            } else if (defender.manhattanDistanceTo({x:x,y:y}) == 1 && Game.map.terrain(x,y).isNatural) {
                 value *= Game.bresenhamTranslucence(this, {x:x,y:y}, function(x,y){ return Game.map.terrain(x,y).translucence; });
                 vis += value/10;
             }
