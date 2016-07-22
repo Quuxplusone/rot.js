@@ -104,55 +104,108 @@ Map.prototype.generateDungeon = function() {
         }
     }
     // Okay, now humans arrive on the island.
-    // Make a boat dock on the east shore.
-    var y = ROT.RNG.getUniformInt(Math.round(this.height*0.4), Math.round(this.height*0.6));
-    var x = this.width/2;
-    assert(this.terrain(x,y).name != 'seawater');
-    while (this.terrain(x,y).name != 'seawater') {
-        ++x;
-    }
-    this.setTerrain(x-1,y-1, new Terrain('floor'));
-    this.setTerrain(x-1,y, new Terrain('floor'));
-    this.setTerrain(x-1,y+1, new Terrain('floor'));
-    this.setTerrain(x,y-1, new Terrain('floor'));
-    this.setTerrain(x,y, new Terrain('floor'));
-    this.setTerrain(x,y+1, new Terrain('floor'));
-    this.setTerrain(x+1,y-1, new Terrain('floor'));
-    this.setTerrain(x+1,y, new Terrain('floor'));
-    this.setTerrain(x+1,y+1, new Terrain('floor'));
-    this.setTerrain(x-1,y+2, new Terrain('low wall'));
-    this.setTerrain(x-2,y+2, new Terrain('low wall'));
-    this.setTerrain(x-2,y+3, new Terrain('low wall'));
-    this.setTerrain(x-1,y-2, new Terrain('low wall'));
-    this.setTerrain(x-2,y-2, new Terrain('low wall'));
-    this.setTerrain(x-2,y-3, new Terrain('low wall'));
+    var y = Math.round(this.height / 2);
+    var x = Math.round(this.width / 2);
+
     // Make a visitor center in the middle of the island.
     // It consists of three adjoining rectangles.
     var x = this.width/2;
     var y = this.height/2;
-    var w = ROT.RNG.getUniformInt(5, 10);
-    var h = ROT.RNG.getUniformInt(4, 7);
-    this.makeRectangle(x, y, w, h, 'wall');
-    x += w;
-    w = ROT.RNG.getUniformInt(5, 10);
-    h = ROT.RNG.getUniformInt(4, 7);
-    y -= h/2;
-    this.makeRectangle(x, y, w, h, 'wall');
-    x += ROT.RNG.getUniformInt(Math.round(-w/2), Math.round(w/2));
-    w = ROT.RNG.getUniformInt(5, 10);
-    h = ROT.RNG.getUniformInt(4, 7);
-    y -= h;
-    this.makeRectangle(x, y, w, h, 'wall');
+    this.makeRectangle(x, y, 7, 5, 'wall');
+    this.makeRectangle(x-10, y-1, 8, 7, 'wall');
+    this.makeRectangle(x+9, y-1, 8, 7, 'wall');
 
-
-    // Make fences with holes in them.
-    var fx = ROT.RNG.getUniformInt(0, 10);
-    var fy = ROT.RNG.getUniformInt(0, 10);
+    // Make pylons every 14 tiles, partitioning the island into rectangles.
+    // Then we'll join together rectangles to make big paddocks.
+    // Classify each rectangle according to its features.
+    var x = 1;
+    var rects = createGrid(this.width/14 |0 + 1, this.height/14 |0 + 1, function(){ return { uf: ++x, size: 1, can_be_paddock: true }; });
+    function union_find(a, b) {
+        if (a === b) return;
+        a.size += b.size;
+        for (var i=0; i < rects.length; ++i) {
+            for (var j=0; j < rects[i].length; ++j) {
+                if (rects[i][j] === b) {
+                    rects[i][j] = a;
+                }
+            }
+        }
+    }
     for (var x = 0; x < this.width; ++x) {
         for (var y = 0; y < this.height; ++y) {
-            if ((x % 40 == fx || y % 30 == fy)) {
-                if (ROT.RNG.getPercentage() <= 95) {
-                    this.setTerrainIfLand(x,y, new Terrain('fence'));
+            var x14 = x/14|0, y14 = y/14|0;
+            // Our fences shouldn't cross water (seawater or pools).
+            if (this.terrain(x,y).name == 'water' || this.terrain(x,y).name == 'seawater') {
+                if (x > 0 && x % 14 == 0) {
+                    union_find(rects[x14][y14], rects[x14-1][y14]);
+                }
+                if (y > 0 && y % 14 == 0) {
+                    union_find(rects[x14][y14], rects[x14][y14-1]);
+                }
+            }
+            // Paddocks shouldn't go right up against the sea.
+            if (this.terrain(x,y).name == 'seawater' || this.terrain(x,y).name == 'wall') {
+                rects[x14][y14].can_be_paddock = false;
+            }
+        }
+    }
+    for (var i=0; i < this.width/14 - 1; ++i) {
+        for (var j=0; j < this.height/14 - 1; ++j) {
+            if (rects[i][j].can_be_paddock && rects[i][j].size < 9) {
+                if (rects[i+1][j] !== rects[i][j] && rects[i+1][j].can_be_paddock && rects[i+1][j].size < 4) {
+                    union_find(rects[i][j], rects[i+1][j]);
+                }
+            }
+            if (rects[i][j].can_be_paddock && rects[i][j].size < 9) {
+                if (rects[i][j+1] !== rects[i][j] && rects[i][j+1].can_be_paddock && rects[i][j+1].size < 4) {
+                    union_find(rects[i][j], rects[i][j+1]);
+                }
+            }
+        }
+    }
+    // Now make the fences.
+    for (var x = 1; x < this.width-1; ++x) {
+        for (var y = 1; y < this.height-1; ++y) {
+            var x14 = x/14|0, y14 = y/14|0;
+            if (x % 14 == 0 && y % 14 == 0) {
+                if (rects[x14][y14-1] !== rects[x14-1][y14-1] && (rects[x14][y14-1].can_be_paddock || rects[x14-1][y14-1].can_be_paddock)) {
+                    this.setTerrain(x,y, new Terrain('fence'));
+                } else if (rects[x14-1][y14] !== rects[x14-1][y14-1] && (rects[x14-1][y14].can_be_paddock || rects[x14-1][y14-1].can_be_paddock)) {
+                    this.setTerrain(x,y, new Terrain('fence'));
+                }
+            }
+            if (x % 14 == 0) {
+                if (rects[x14][y14] !== rects[x14-1][y14] && (rects[x14][y14].can_be_paddock || rects[x14-1][y14].can_be_paddock)) {
+                    this.setTerrain(x,y, new Terrain('fence'));
+                }
+            }
+            if (y % 14 == 0) {
+                if (rects[x14][y14] !== rects[x14][y14-1] && (rects[x14][y14].can_be_paddock || rects[x14][y14-1].can_be_paddock)) {
+                    this.setTerrain(x,y, new Terrain('fence'));
+                }
+            }
+        }
+    }
+    // And pylons.
+    for (var x = 1; x < this.width-1; ++x) {
+        for (var y = 1; y < this.height-1; ++y) {
+            if (this.terrain(x,y).name == 'fence') {
+                var ns = (this.terrain(x+1,y).name == 'fence') || (this.terrain(x-1,y).name == 'fence');
+                var ew = (this.terrain(x,y+1).name == 'fence') || (this.terrain(x,y-1).name == 'fence');
+                if (ns && ew) {
+                    this.setTerrain(x-1,y-1, new Terrain('low wall'));
+                    this.setTerrain(x-1,y, new Terrain('low wall'));
+                    this.setTerrain(x-1,y+1, new Terrain('low wall'));
+                    this.setTerrain(x,y-1, new Terrain('low wall'));
+                    this.setTerrain(x,y, new Terrain('low wall'));
+                    this.setTerrain(x,y+1, new Terrain('low wall'));
+                    this.setTerrain(x+1,y-1, new Terrain('low wall'));
+                    this.setTerrain(x+1,y, new Terrain('low wall'));
+                    this.setTerrain(x+1,y+1, new Terrain('low wall'));
+                } else {
+                    if (ROT.RNG.getPercentage() <= 10) {
+                        this.setTerrain(x,y, new Terrain('grass'));
+                    }
                 }
             }
         }
@@ -191,6 +244,12 @@ var Terrain = function(name) {
             this.appearance = ['+', '#f11'];
             this.movementCost = Infinity;
             this.translucence = 1;
+            break;
+        case 'dirt':
+            this.appearance = [['.'].random(), 'brown'];
+            this.movementCost = 1;
+            this.translucence = 1;
+            this.isNatural = true;
             break;
         case 'grass':
             this.appearance = [[',', '.'].random(), 'green'];
@@ -235,6 +294,18 @@ var Terrain = function(name) {
 Terrain.prototype.the = function() {
     return 'the ' + this.name;
 };
+Terrain.prototype.a = function() {
+    switch (this.name) {
+        case 'aether':
+        case 'grass':
+        case 'dirt':
+        case 'water':
+        case 'seawater':
+            return this.the();
+        default:
+            return 'a ' + this.name;
+    }
+};
 Terrain.seawaterGlyphForCoordinates = function(x,y, time) {
     var p = Terrain.animateWater_perlin;
     return ['\u223C', '≈'][Math.sin(p.noise(x/10,y/10,time/10000)) > 0 ? 0 : 1];
@@ -247,7 +318,7 @@ Terrain.animateWater = function() {
         var data = Game.display._data[key];
         if (data[2] == '\u223C' || data[2] == '≈') {
             data[2] = Terrain.seawaterGlyphForCoordinates(data[0] + dx, data[1] + dy, now);
-            Game.display._dirty = true;
+            Game.display.draw(data[0], data[1], data[2], data[3], data[4]);
         }
     }
 };

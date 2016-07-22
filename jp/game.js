@@ -1,3 +1,4 @@
+String.format.map.a = "a";
 String.format.map.the = "the";
 
 ROT.RNG.getNormalInt = function(min, max) {
@@ -47,9 +48,17 @@ var Game = {
         this.level.appendChild(this.display.getContainer());
         this.level.focus();
 
-        this.level.addEventListener("keydown", function(e) {
+        this.level.addEventListener("keypress", function(e) {
+            // Shift-X counts as two "keydown" events but only a single "keypress" event.
             Game.parseRoguelikeInput(e.keyCode);
             Game.runGameLoopUntilBlocked();
+        });
+        this.level.addEventListener("keydown", function(e) {
+            // Arrow keys don't trigger "keypress" events.
+            if (37 <= e.keyCode && e.keyCode <= 40) {
+                Game.parseRoguelikeInput(e.keyCode);
+                Game.runGameLoopUntilBlocked();
+            }
         });
         this.adventure_input.addEventListener("keyup", function(e) {
             this.undo_buffer = this.undo_buffer || [''];
@@ -204,6 +213,8 @@ var Game = {
             this.has_been_over = false;
         }
         switch (key) {
+            case ROT.VK_COLON:
+                Game.alert('You are standing on %a.'.format(Game.map.terrain(Game.player.x, Game.player.y))); return;
             case ROT.VK_PERIOD:
                 Game.player.setNextAction(new WaitAction()); return;
             case ROT.VK_UP:
@@ -237,8 +248,8 @@ var Game = {
         }
         switch (text) {
             case 'quit': case 'q':
-                Game.is_over = true;
                 Game.alert('Your game has ended. Type RESTART to begin a new game.');
+                Game.lose();
                 return;
             case 'explore':
                 Game.player.setStrategy(new ExploreStrategy(Game.player));
@@ -309,9 +320,13 @@ var Game = {
 
         console.log('Placing velociraptors...');
         for (var i = 0; i < 1; ++i) {
-            var x = ROT.RNG.getUniformInt(0, this.map.width-1);
-            var y = ROT.RNG.getUniformInt(0, this.map.height-1);
-            var num_dinos = 3;
+            do {
+                var x = ROT.RNG.getUniformInt(0, this.map.width-1);
+                var y = ROT.RNG.getUniformInt(0, this.map.height-1);
+                var dino = new Velociraptor(x,y);
+            } while (!dino.canPass(dino));
+            this.actors.push(dino);
+            var num_dinos = 2;
             for (var t2 = 0; t2 < num_dinos; ++t2) {
                 var tx = ROT.RNG.getNormalInt(x-5, x+5);
                 var ty = ROT.RNG.getNormalInt(y-5, y+5);
