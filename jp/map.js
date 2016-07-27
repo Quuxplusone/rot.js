@@ -306,18 +306,20 @@ Terrain.prototype.a = function() {
             return 'a ' + this.name;
     }
 };
-Terrain.seawaterGlyphForCoordinates = function(x,y, time) {
+Terrain.seawaterGlyphForCoordinates = function(x,y) {
     var p = Terrain.animateWater_perlin;
+    var time = Terrain.animateWater_now;
     return ['\u223C', '≈'][Math.sin(p.noise(x/10,y/10,time/10000)) > 0 ? 0 : 1];
 }
 Terrain.animateWater = function() {
     var now = Date.now();
     var dx = Terrain.animateWater_dx;
     var dy = Terrain.animateWater_dy;
+    Terrain.animateWater_now = now;
     for (var key in Game.display._data) {
         var data = Game.display._data[key];
         if (data[2] == '\u223C' || data[2] == '≈') {
-            data[2] = Terrain.seawaterGlyphForCoordinates(data[0] + dx, data[1] + dy, now);
+            data[2] = Terrain.seawaterGlyphForCoordinates(data[0] + dx, data[1] + dy);
             Game.display.draw(data[0], data[1], data[2], data[3], data[4]);
         }
     }

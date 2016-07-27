@@ -354,45 +354,35 @@ var Game = {
         if (dx < 0) {
             if (dy < 0) {
                 if (-dy < -dx) {
-                    assert(0 <= -dy && -dy <= -dx);
                     return this.bresenhamTranslucence0(-dy, -dx, function(dy,dx) { return translucenceCallback(fromCoord.x-dx, fromCoord.y-dy); });
                 } else {
-                    assert(0 <= -dx && -dx <= -dy);
                     return this.bresenhamTranslucence0(-dx, -dy, function(dx,dy) { return translucenceCallback(fromCoord.x-dx, fromCoord.y-dy); });
                 }
             } else {
                 if (dy < -dx) {
-                    assert(0 <= dy && dy <= -dx);
                     return this.bresenhamTranslucence0(dy, -dx, function(dy,dx) { return translucenceCallback(fromCoord.x-dx, fromCoord.y+dy); });
                 } else {
-                    assert(0 <= -dx && -dx <= dy);
                     return this.bresenhamTranslucence0(-dx, dy, function(dx,dy) { return translucenceCallback(fromCoord.x-dx, fromCoord.y+dy); });
                 }
             }
         } else {
             if (dy < 0) {
                 if (-dy < dx) {
-                    assert(0 <= -dy && -dy <= dx);
                     return this.bresenhamTranslucence0(-dy, dx, function(dy,dx) { return translucenceCallback(fromCoord.x+dx, fromCoord.y-dy); });
                 } else {
-                    assert(0 <= dx && dx <= -dy);
                     return this.bresenhamTranslucence0(dx, -dy, function(dx,dy) { return translucenceCallback(fromCoord.x+dx, fromCoord.y-dy); });
                 }
             } else {
                 if (dy < dx) {
-                    assert(0 <= dy && dy <= dx);
                     return this.bresenhamTranslucence0(dy, dx, function(dy,dx) { return translucenceCallback(fromCoord.x+dx, fromCoord.y+dy); });
                 } else {
-                    assert(0 <= dx && dx <= dy);
                     return this.bresenhamTranslucence0(dx, dy, function(dx,dy) { return translucenceCallback(fromCoord.x+dx, fromCoord.y+dy); });
                 }
             }
         }
     },
     bresenhamTranslucence0: function(dx,dy, translucenceCallback) {
-        assert(dx >= 0);
-        assert(dy >= 0);
-        assert(dy >= dx);
+        assert(0 <= dx && dx <= dy);
         var consecutive_clear_spaces = 0;
         var result = 1.0;
         var D = dx - dy;
@@ -484,7 +474,9 @@ var Game = {
             bloodshotRadius = Infinity;
         }
 
-        var now = Date.now();
+        if (!Game.is_over) {
+            Terrain.animateWater_now = Date.now();
+        }
         Terrain.animateWater_dx = dx;
         Terrain.animateWater_dy = dy;
         for (var x = dx; x < dx + display_width; ++x) {
@@ -509,7 +501,7 @@ var Game = {
                     } else {
                         [g, fg, bg] = this.map.terrain(x, y).appearance;
                         if (this.map.terrain(x,y).name == 'seawater') {
-                            g = Terrain.seawaterGlyphForCoordinates(x, y, now);
+                            g = Terrain.seawaterGlyphForCoordinates(x, y);
                         }
                         this.map.terrain(x,y).isMemorized = this.map.terrain(x,y).isMemorable;
                     }
