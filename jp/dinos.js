@@ -111,6 +111,9 @@ var Allosaurus = function(x, y) {
         'claw': {strength:function(){ return 5; }},
     };
     this._last_prey = null;
+    this._territory_center = {x:x, y:y};
+    this._territory_radius = 20;
+    this._hunger = 0;
 };
 Allosaurus.prototype = new Creature();
 Allosaurus.prototype.the = function() { return 'the allosaurus'; };
@@ -124,8 +127,8 @@ Allosaurus.prototype.whenHitBy = function(attacker) {
     }
 };
 Allosaurus.prototype.getNextAction = function() {
-    // Find a nearby and visible prey animal; chase it.
-    if (this._strategy == null) {
+    this._hunger += 1;
+    if (this._strategy == null && this._hunger > 100) {
         // Try to find a visible prey animal who's not our last prey.
         var targets = Game.actors.filter(function (prey) {
             return prey != this && prey != this._last_prey && prey.hp < this.hp && this.canSee(prey);
@@ -134,9 +137,15 @@ Allosaurus.prototype.getNextAction = function() {
             var prey = targets.random();
             this._last_prey = prey;
             this.setStrategy(new HuntBySightStrategy(prey));
-        } else {
-            this.setStrategy(new ExploreStrategy(this));
+            this._hunger = 0;  // TODO: corpses, eating, proper satiation
         }
+    }
+    if (this._strategy == null) {
+        var destination = this._territory_center.coordPlus({
+            x: ROT.RNG.getUniformInt(-this._territory_radius, this._territory_radius),
+            y: ROT.RNG.getUniformInt(-this._territory_radius, this._territory_radius),
+        });
+        this.setStrategy(new ExploreStrategy(this, destination));
     }
     assert(this._strategy != null);
     var action = this._strategy.getNextAction(this);

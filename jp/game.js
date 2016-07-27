@@ -56,7 +56,7 @@ var Game = {
         this.level.addEventListener("keydown", function(e) {
             // Arrow keys don't trigger "keypress" events.
             if (37 <= e.keyCode && e.keyCode <= 40) {
-                Game.parseRoguelikeInput(e.keyCode);
+                Game.parseRoguelikeInput(1000 + e.keyCode);
                 Game.runGameLoopUntilBlocked();
             }
         });
@@ -213,19 +213,20 @@ var Game = {
             this.has_been_over = false;
         }
         switch (key) {
-            case ROT.VK_COLON:
+            case 58: // :
                 Game.alert('You are standing on %a.'.format(Game.map.terrain(Game.player.x, Game.player.y))); return;
-            case ROT.VK_PERIOD:
+            case 46: // .
                 Game.player.setNextAction(new WaitAction()); return;
-            case ROT.VK_UP:
+            case 1038: // up
                 Game.player.setNextAction(new WalkOrFightAction({x:0, y:-1})); return;
-            case ROT.VK_DOWN:
+            case 1040: // down
                 Game.player.setNextAction(new WalkOrFightAction({x:0, y:1})); return;
-            case ROT.VK_RIGHT:
+            case 1039: // right
                 Game.player.setNextAction(new WalkOrFightAction({x:1, y:0})); return;
-            case ROT.VK_LEFT:
+            case 1037: // left
                 Game.player.setNextAction(new WalkOrFightAction({x:-1, y:0})); return;
             default:
+                console.log(key);
                 return;
         }
     },
