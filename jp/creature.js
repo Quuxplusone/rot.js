@@ -1,5 +1,5 @@
-var Creature = function(x, y, maxhp) {
-    Actor.call(this, x, y);
+var Creature = function(x, y, desc, maxhp) {
+    Actor.call(this, x, y, desc);
     this.maxhp = maxhp;
     this.hp = maxhp;
 };

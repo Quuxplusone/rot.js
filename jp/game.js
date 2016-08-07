@@ -214,7 +214,12 @@ var Game = {
         }
         switch (key) {
             case 58: // :
-                Game.alert('You are standing on %a.'.format(Game.map.terrain(Game.player.x, Game.player.y))); return;
+                Game.alert('You are standing on %a.'.format(Game.map.terrain(Game.player.x, Game.player.y)));
+                var items = Game.actorsAt(Game.player).filter(function(a){ return a instanceof Item; });
+                for (var i=0; i < items.length; ++i) {
+                    Game.alert('You see here %a.'.format(items[i]));
+                }
+                return;
             case 46: // .
                 Game.player.setNextAction(new WaitAction()); return;
             case 1038: // up
@@ -266,6 +271,13 @@ var Game = {
 
     actorsAt: function(coord) {
         return this.actors.filter(function(a) { return a.coordEquals(coord); });
+    },
+
+    removeActor: function(actor) {
+        assert(actor !== Game.player);
+        var idx = Game.actors.indexOf(actor);
+        assert(idx >= 0);
+        Game.actors.splice(idx, 1);
     },
 
     _generateMap: function() {

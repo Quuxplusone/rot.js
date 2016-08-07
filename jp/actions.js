@@ -73,8 +73,8 @@ FightAction.prototype.perform = function(attacker) {
     if (defender.hp == 0) {
         description = '%The %s %the!'.format(attacker, verbs(attacker, 'kill'), defender);
         if (defender != Game.player) {
-            // TODO: removing the player from the actors list is never correct; how should we handle this really?
-            Game.actors.splice(Game.actors.indexOf(defender), 1);
+            Game.actors.push(new Corpse(defender.x, defender.y, defender.description + ' corpse'));
+            Game.removeActor(defender);
         } else {
             Game.alert(description);
             description = '*** You have died ***';

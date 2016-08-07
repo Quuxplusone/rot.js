@@ -1,12 +1,11 @@
 var Human = function(x, y) {
-    Creature.call(this, x, y, 100);
+    Creature.call(this, x, y, 'park ranger', 100);
     this.stealth = 0;
     this.attacks = {
         'hit': {strength:function(){ return 2; }},
     };
 };
 Human.prototype = new Creature();
-Human.prototype.the = function() { return "the park ranger"; };
 Human.prototype.getAppearance = function() { return ['@', '#ddd', '#000']; };
 Human.prototype.getSpeed = function() { return 10; };
 Human.prototype.getNextAction = function() {
@@ -27,7 +26,7 @@ Human.prototype.getNextAction = function() {
 };
 
 var Procompsognathus = function(x, y) {
-    Creature.call(this, x, y, 10);
+    Creature.call(this, x, y, 'procompsognathus', 10);
     this.stealth = 0.1;
     this.attacks = {
         'bite': {strength:function(){ return 5; }},
@@ -37,7 +36,6 @@ var Procompsognathus = function(x, y) {
     this._predatorList = [];
 };
 Procompsognathus.prototype = new Creature();
-Procompsognathus.prototype.the = function() { return 'the procompsognathus'; };
 Procompsognathus.prototype.getAppearance = function() { return ['c', 'lightgreen']; };
 Procompsognathus.prototype.getSpeed = function() { return this._speed; };
 Procompsognathus.prototype._publicizePredator = function(attacker) {
@@ -104,7 +102,7 @@ Procompsognathus.prototype.getNextAction = function() {
 };
 
 var Allosaurus = function(x, y) {
-    Creature.call(this, x, y, 1000);
+    Creature.call(this, x, y, 'allosaurus', 1000);
     this.stealth = 0;
     this.attacks = {
         'bite': {strength:function(){ return 50; }},
@@ -116,7 +114,6 @@ var Allosaurus = function(x, y) {
     this._hunger = 0;
 };
 Allosaurus.prototype = new Creature();
-Allosaurus.prototype.the = function() { return 'the allosaurus'; };
 Allosaurus.prototype.getAppearance = function() { return ['A', 'red']; };
 Allosaurus.prototype.getSpeed = function() { return 11; };
 Allosaurus.prototype.whenHitBy = function(attacker) {
@@ -131,7 +128,7 @@ Allosaurus.prototype.getNextAction = function() {
     if (this._strategy == null && this._hunger > 100) {
         // Try to find a visible prey animal who's not our last prey.
         var targets = Game.actors.filter(function (prey) {
-            return prey != this && prey != this._last_prey && prey.hp < this.hp && this.canSee(prey);
+            return (prey instanceof Creature) && prey != this && prey != this._last_prey && prey.hp < this.hp && this.canSee(prey);
         }.bind(this));
         if (targets.length) {
             var prey = targets.random();
@@ -159,7 +156,7 @@ Allosaurus.prototype.getNextAction = function() {
 
 
 var Velociraptor = function(x, y) {
-    Creature.call(this, x, y, 100);
+    Creature.call(this, x, y, 'velociraptor', 100);
     this.stealth = 0.3;
     this.attacks = {
         'slash':{strength:function(){ return 30; }},
@@ -168,7 +165,6 @@ var Velociraptor = function(x, y) {
     };
 };
 Velociraptor.prototype = new Creature();
-Velociraptor.prototype.the = function() { return 'the velociraptor'; };
 Velociraptor.prototype.getAppearance = function() { return ['v', '#252']; };
 Velociraptor.prototype.getSpeed = function() { return 11; };
 Velociraptor.prototype.whenHitBy = function(attacker) {
@@ -183,7 +179,7 @@ Velociraptor.prototype.getNextAction = function() {
     if (this._strategy == null) {
         // Try to find a visible prey animal who's not our last prey.
         var targets = Game.actors.filter(function (prey) {
-            return !(prey instanceof Velociraptor) && this.mooreDistanceTo(prey) < 5 && this.canSee(prey);
+            return (prey instanceof Creature) && !(prey instanceof Velociraptor) && this.mooreDistanceTo(prey) < 5 && this.canSee(prey);
         }.bind(this));
         if (targets.length) {
             var prey = targets.random();
