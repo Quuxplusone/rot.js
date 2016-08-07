@@ -220,16 +220,28 @@ var Game = {
                     Game.alert('You see here %a.'.format(items[i]));
                 }
                 return;
+            case 121: // y
+                Game.player.setNextAction(new WalkOrFightAction({x:-1, y:-1})); return;
+            case 1038: // up
+            case 107: // k
+                Game.player.setNextAction(new WalkOrFightAction({x:0, y:-1})); return;
+            case 117: // u
+                Game.player.setNextAction(new WalkOrFightAction({x:1, y:-1})); return;
+            case 1037: // left
+            case 104: // h
+                Game.player.setNextAction(new WalkOrFightAction({x:-1, y:0})); return;
             case 46: // .
                 Game.player.setNextAction(new WaitAction()); return;
-            case 1038: // up
-                Game.player.setNextAction(new WalkOrFightAction({x:0, y:-1})); return;
-            case 1040: // down
-                Game.player.setNextAction(new WalkOrFightAction({x:0, y:1})); return;
             case 1039: // right
+            case 108: // l
                 Game.player.setNextAction(new WalkOrFightAction({x:1, y:0})); return;
-            case 1037: // left
-                Game.player.setNextAction(new WalkOrFightAction({x:-1, y:0})); return;
+            case 98: // b
+                Game.player.setNextAction(new WalkOrFightAction({x:-1, y:1})); return;
+            case 1040: // down
+            case 106: // j
+                Game.player.setNextAction(new WalkOrFightAction({x:0, y:1})); return;
+            case 110: // n
+                Game.player.setNextAction(new WalkOrFightAction({x:1, y:1})); return;
             default:
                 console.log(key);
                 return;
